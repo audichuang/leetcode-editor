@@ -33,6 +33,13 @@ public class ProxyLoadHtmlResourceHandler extends CefResourceHandlerAdapter {
         this.status = status;
     }
 
+    // 二进制资源（如图片）不能像html那样以String中转，否则会破坏字节内容
+    public ProxyLoadHtmlResourceHandler(@NotNull byte[] data, Map<String,String> header, int status) {
+        myInputStream = new ByteArrayInputStream(data);
+        this.header = header;
+        this.status = status;
+    }
+
     @Override
     public boolean processRequest(@NotNull CefRequest request, @NotNull CefCallback callback) {
         callback.Continue();

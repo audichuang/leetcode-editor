@@ -25,7 +25,8 @@ import com.intellij.util.Url;
 import com.intellij.util.Urls;
 import com.intellij.util.io.HttpRequests;
 import com.intellij.util.io.URLUtil;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.util.net.HttpConfigurable;
+import com.intellij.util.ui.StartupUiUtil;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.utils.FileUtils;
 import com.shuzijun.leetcode.plugin.utils.PropertiesUtils;
@@ -59,6 +60,8 @@ public class LCVPanel extends JCEFHtmlPanel {
     private static final Logger LOG = Logger.getInstance(LCVPanel.class);
 
     private final Url servicePath = BuiltInServerManager.getInstance().addAuthToken(Urls.parseEncoded("http://localhost:" + BuiltInServerManager.getInstance().getPort() + PreviewStaticServer.PREFIX));
+    // 本地内建server的scheme+host+port，用于判断资源请求是不是打到本地服务（本地的不需要代理）
+    private final String localServicePrefix = servicePath.getScheme() + URLUtil.SCHEME_SEPARATOR + servicePath.getAuthority();
     private String templateHtmlFile = "template/default.html";
 
     private CefRequestHandler requestHandler;
@@ -67,7 +70,8 @@ public class LCVPanel extends JCEFHtmlPanel {
     private final String url;
     private final String text;
     private final Project project;
-    private final List<String> iframe = new ArrayList<>();
+    private final Set<String> iframe = Collections.synchronizedSet(new HashSet<>());
+    private static volatile String templateCache;
     private static final List<String> headers = Arrays.asList(HttpHeaderNames.CONTENT_SECURITY_POLICY.toString(), HttpHeaderNames.CONTENT_ENCODING.toString()
             , HttpHeaderNames.CONTENT_LENGTH.toString());
 
@@ -106,7 +110,15 @@ public class LCVPanel extends JCEFHtmlPanel {
             @Override
             public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request, boolean isNavigation, boolean isDownload, String requestInitiator, BoolRef disableDefaultHandling) {
                 String requestUrl = request.getURL();
-                if (!iframe.contains(requestUrl)) {
+                boolean isIframeRequest = iframe.contains(requestUrl);
+                // 题目描述里的<img>直连LeetCode CDN时JCEF会忽略IDE的proxy设置导致图片加载失败，
+                // 这里对非本地服务的图片请求也走和iframe一样的代理通道；
+                // 仅在用户配置了IDE proxy时才需要这个中转，未配置proxy时JCEF可直连，维持原行为（避免#553引入的回归）
+                final HttpConfigurable httpConfigurable = HttpConfigurable.getInstance();
+                boolean useProxy = httpConfigurable.USE_HTTP_PROXY || httpConfigurable.USE_PROXY_PAC;
+                boolean isRemoteImage = useProxy && !isIframeRequest && request.getResourceType() == CefRequest.ResourceType.RT_IMAGE
+                        && requestUrl.startsWith(URLUtil.HTTP_PROTOCOL) && !requestUrl.startsWith(localServicePrefix);
+                if (!isIframeRequest && !isRemoteImage) {
                     return null;
                 }
 
@@ -127,6 +139,9 @@ public class LCVPanel extends JCEFHtmlPanel {
                                                     header.put(key, StringUtils.join(values.toArray(), ";"));
                                                 }
                                             });
+                                            if (isRemoteImage) {
+                                                return new ProxyLoadHtmlResourceHandler(request.readBytes(null), header, urlConnection.getResponseCode());
+                                            }
                                             return new ProxyLoadHtmlResourceHandler(request.readString(), header, urlConnection.getResponseCode());
                                         }
                                     });
@@ -151,6 +166,7 @@ public class LCVPanel extends JCEFHtmlPanel {
     }
 
     public void reloadText() {
+        iframe.clear();
         loadHTML(createHtml(text), url);
     }
 
@@ -188,29 +204,23 @@ public class LCVPanel extends JCEFHtmlPanel {
     }
 
     private String createHtml(String text) {
-        InputStream inputStream = null;
-
         try {
-
-            inputStream = PreviewStaticServer.class.getResourceAsStream("/" + templateHtmlFile);
-
-            String template = new String(FileUtilRt.loadBytes(inputStream));
+            String template = templateCache;
+            if (template == null) {
+                try (InputStream inputStream = PreviewStaticServer.class.getResourceAsStream("/" + templateHtmlFile)) {
+                    template = new String(FileUtilRt.loadBytes(inputStream));
+                }
+                templateCache = template;
+            }
             return template.replace("{{service}}", servicePath.getScheme() + URLUtil.SCHEME_SEPARATOR + servicePath.getAuthority() + servicePath.getPath())
                     .replace("{{serverToken}}", org.apache.commons.lang3.StringUtils.isNotBlank(servicePath.getParameters()) ? servicePath.getParameters().substring(1) : "")
                     .replace("{{fileValue}}", text)
                     .replace("{{Lang}}", PropertiesUtils.getInfo("Lang"))
-                    .replace("{{darcula}}", UIUtil.isUnderDarcula() + "")
+                    .replace("{{darcula}}", StartupUiUtil.INSTANCE.isDarkTheme() + "")
                     .replace("{{ideStyle}}", getStyle(true))
                     ;
         } catch (IOException e) {
             throw new RuntimeException(e);
-        } finally {
-            if (inputStream != null) {
-                try {
-                    inputStream.close();
-                } catch (IOException ignore) {
-                }
-            }
         }
     }
 
@@ -232,7 +242,7 @@ public class LCVPanel extends JCEFHtmlPanel {
                     "\"Hiragino Sans GB\",\"Microsoft Yahei\",sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\",\"Noto Color Emoji\",\"Segoe UI Symbol\"," +
                     "\"Android Emoji\",\"EmojiSymbols\";";
             StringBuilder sb = new StringBuilder(isTag ? "<style id=\"ideaStyle\">" : "");
-            sb.append(UIUtil.isUnderDarcula() ? ".vditor--dark" : ".vditor").append("{--panel-background-color:").append(toHexColor(defaultBackground))
+            sb.append(StartupUiUtil.INSTANCE.isDarkTheme() ? ".vditor--dark" : ".vditor").append("{--panel-background-color:").append(toHexColor(defaultBackground))
                     .append(";--textarea-background-color:").append(toHexColor(defaultBackground)).append(";");
             sb.append("--toolbar-background-color:").append(toHexColor(JBColor.background())).append(";");
             sb.append("}");
@@ -264,6 +274,6 @@ public class LCVPanel extends JCEFHtmlPanel {
     public void updateStyle() {
         String style = getStyle(false);
         getCefBrowser().executeJavaScript(
-                "updateStyle('" + style + "'," + UIUtil.isUnderDarcula() + ");", getCefBrowser().getURL(), 0);
+                "updateStyle('" + style + "'," + StartupUiUtil.INSTANCE.isDarkTheme() + ");", getCefBrowser().getURL(), 0);
     }
 }

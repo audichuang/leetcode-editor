@@ -37,17 +37,24 @@ public class FileUtils {
             if (body == null) {
                 return;
             }
-            if (!file.getParentFile().exists()) {
-                file.getParentFile().mkdirs();
+            // mkdirs()/createNewFile()在并发场景下即使是另一线程刚创建成功也会返回false，
+            // 所以返回false后要再查一次exists()，避免把这种情况误判为失败
+            if (!file.getParentFile().exists() && !file.getParentFile().mkdirs() && !file.getParentFile().exists()) {
+                LogUtils.LOG.error("创建目录失败:" + file.getParentFile().getPath());
+                MessageUtils.showAllWarnMsg("error", PropertiesUtils.getInfo("file.save.failed", file.getPath()));
+                return;
             }
-            if (!file.exists()) {
-                file.createNewFile();
+            if (!file.exists() && !file.createNewFile() && !file.exists()) {
+                LogUtils.LOG.error("创建文件失败:" + file.getPath());
+                MessageUtils.showAllWarnMsg("error", PropertiesUtils.getInfo("file.save.failed", file.getPath()));
+                return;
             }
             FileOutputStream fileOutputStream = new FileOutputStream(file, Boolean.FALSE);
             fileOutputStream.write(body.getBytes("UTF-8"));
             fileOutputStream.close();
         } catch (IOException io) {
             LogUtils.LOG.error("保存文件错误", io);
+            MessageUtils.showAllWarnMsg("error", PropertiesUtils.getInfo("file.save.failed", file.getAbsolutePath()));
         }
     }
 

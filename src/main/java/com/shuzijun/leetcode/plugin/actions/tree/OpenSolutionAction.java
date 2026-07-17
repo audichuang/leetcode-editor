@@ -41,6 +41,9 @@ public class OpenSolutionAction extends AbstractTreeAction {
         }
         Question question = QuestionManager.getQuestionByTitleSlug(questionView.getTitleSlug(), anActionEvent.getProject(), true);
         if (question == null) {
+            // 尚未快取(readOnlyCache miss)：不沿用上一題的 enabled 狀態，讓使用者可點擊，
+            // 實際資料由 actionPerformed 走非 readOnlyCache 路徑載入
+            anActionEvent.getPresentation().setEnabled(true);
             return;
         }
         if (Constant.ARTICLE_LIVE_NONE.equals(question.getArticleLive())) {

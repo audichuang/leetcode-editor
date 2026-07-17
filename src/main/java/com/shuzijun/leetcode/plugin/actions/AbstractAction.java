@@ -10,12 +10,15 @@ import com.intellij.openapi.progress.Task;
 import com.shuzijun.leetcode.plugin.model.Config;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.setting.PersistentConfig;
+import com.shuzijun.leetcode.plugin.utils.LogUtils;
 import com.shuzijun.leetcode.plugin.utils.MTAUtils;
 import com.shuzijun.leetcode.plugin.utils.MessageUtils;
 import com.shuzijun.leetcode.plugin.utils.PropertiesUtils;
 import com.shuzijun.leetcode.plugin.utils.UpdateUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+
+import java.io.IOException;
 
 /**
  * @author shuzijun
@@ -34,7 +37,6 @@ public abstract class AbstractAction extends AnAction {
         }
 
         try {
-            MTAUtils.click(anActionEvent.getActionManager().getId(this), config);
             UpdateUtils.examine(config, anActionEvent.getProject());
         } catch (Exception e) {
         }
@@ -42,7 +44,20 @@ public abstract class AbstractAction extends AnAction {
         ProgressManager.getInstance().run(new Task.Backgroundable(anActionEvent.getProject(),anActionEvent.getActionManager().getId(this),false) {
             @Override
             public void run(@NotNull ProgressIndicator progressIndicator) {
-                actionPerformed(anActionEvent, config);
+                try {
+                    actionPerformed(anActionEvent, config);
+                } catch (RuntimeException e) {
+                    Throwable cause = e;
+                    while (cause != null) {
+                        if (cause instanceof IOException) {
+                            LogUtils.LOG.warn("network error", e);
+                            MessageUtils.getInstance(anActionEvent.getProject()).showWarnMsg("error", PropertiesUtils.getInfo("request.failed"));
+                            return;
+                        }
+                        cause = cause.getCause();
+                    }
+                    throw e;
+                }
             }
         });
 
