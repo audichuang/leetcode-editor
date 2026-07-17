@@ -69,10 +69,11 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         MessageBusConnection messageBusConnection = ApplicationManager.getApplication().getMessageBus().connect(this);
         messageBusConnection.subscribe(ConfigNotifier.TOPIC, (oldConfig, newConfig) -> loaColor(newConfig));
         messageBusConnection.subscribe(QuestionStatusNotifier.QUESTION_STATUS_TOPIC, question -> {
-            if (myList != null) {
-                for (T q : myList) {
-                    if (dataNotifier(q, question)) {
-                        refreshData();
+            List<T> list = myList; // 快照一次，避免 EDT 中途換掉 myList 造成 size/get 撕裂
+            if (list != null) {
+                for (int i = 0; i < list.size(); i++) {
+                    if (dataNotifier(list.get(i), question)) {
+                        refreshRow(i);
                         break;
                     }
                 }
@@ -117,14 +118,21 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         return myPageInfo;
     }
 
-    private void refreshData() {
+    private void refreshRow(int row) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            this.myTableModel.updateData(myList);
-            setColumnWidth(myTable);
+            if (myList == null || row >= myList.size() || row >= myTableModel.getRowCount()) {
+                return;
+            }
+            for (int j = 0; j < myTableModel.columnName.length; j++) {
+                myTableModel.setValueAt(myTableModel.getValue(myList.get(row), j), row, j);
+            }
         });
     }
 
     public void refreshData(String selectTitleSlug) {
+        // 資料組裝在呼叫端(背景)執行緒完成，EDT 只做 setDataVector
+        List<T> rows = myPageInfo.getRows();
+        Object[][] dataVector = myTableModel.buildDataVector(rows);
         ApplicationManager.getApplication().invokeLater(() -> {
             if (first) {
                 this.remove(firstToolTip);
@@ -134,8 +142,8 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
                 }
                 first = false;
             }
-            this.myList = myPageInfo.getRows();
-            this.myTableModel.updateData(myList);
+            this.myList = rows;
+            this.myTableModel.setDataVector(dataVector, myTableModel.columnNameShort);
             setColumnWidth(myTable);
             myTable.requestFocusInWindow();
             if (selectTitleSlug != null) {
@@ -221,8 +229,6 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
 
     protected static abstract class MyTableModel<T> extends DefaultTableModel {
 
-        protected NumberFormat nf = NumberFormat.getPercentInstance();
-
         protected String[] columnName;
         protected String[] columnNameShort;
 
@@ -230,8 +236,15 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
             super(new Object[]{"info"}, 1);
             this.columnName = columnName;
             this.columnNameShort = columnNameShort;
+        }
+
+        // NumberFormat 非執行緒安全，buildDataVector 現在會被背景緒並行呼叫，
+        // 不能共用單一欄位實例，改為每次取用時建立區域變數
+        protected static NumberFormat newPercentFormat() {
+            NumberFormat nf = NumberFormat.getPercentInstance();
             nf.setMinimumFractionDigits(1);
             nf.setMaximumFractionDigits(1);
+            return nf;
         }
 
         public abstract Object getValue(T question, int columnIndex);
@@ -241,7 +254,7 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
             return false;
         }
 
-        public void updateData(List<T> questionList) {
+        public Object[][] buildDataVector(List<T> questionList) {
             if (questionList == null) {
                 questionList = new ArrayList<>();
             }
@@ -253,7 +266,7 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
                 }
                 dataVector[i] = line;
             }
-            setDataVector(dataVector, columnNameShort);
+            return dataVector;
         }
     }
 

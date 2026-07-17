@@ -151,7 +151,7 @@ public class NavigatorTable extends NavigatorTableData<QuestionView> {
                 }
 
                 if (columnIndex == 2) {
-                    return nf.format(question.getAcceptance());
+                    return newPercentFormat().format(question.getAcceptance());
                 }
 
                 if (columnIndex == 3) {
@@ -167,7 +167,7 @@ public class NavigatorTable extends NavigatorTableData<QuestionView> {
                     }
                 }
                 if (columnIndex == 4) {
-                    return nf.format(question.getFrequency());
+                    return newPercentFormat().format(question.getFrequency());
                 }
                 return null;
             }

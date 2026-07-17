@@ -58,6 +58,13 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
 
     private boolean isLoad = false;
 
+    // 使用者只關閉此編輯器分頁時 project 不會 dispose，但 this 已 dispose，async 回呼需額外檢查
+    private volatile boolean disposed = false;
+
+    // 多個背景 worker（login reload/submit refresh/快速切換選列）可能亂序完成，
+    // 每次發起新背景載入就遞增，callback 套用結果前比對，只有最新一次會生效
+    private volatile int generation = 0;
+
     private List<Solution> solutionList;
     private JBTable table;
 
@@ -86,20 +93,48 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
 
     private void initComponent(String defaultSlug) {
         isLoad = true;
-        ApplicationManager.getApplication().invokeLater(() -> {
-            JBLabel loadingLabel = new JBLabel("Loading......");
-            mySplitter.setFirstComponent(loadingLabel);
+        int myGen = ++generation;
+        ApplicationManager.getApplication().invokeLater(() -> mySplitter.setFirstComponent(new JBLabel("Loading......")));
+        // 網路請求在背景執行緒完成，EDT 只負責組裝 UI
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                question = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project);
+                Question fetchedQuestion = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project);
+                List<Solution> fetchedSolutionList = (fetchedQuestion != null && Constant.ARTICLE_LIVE_LIST.equals(fetchedQuestion.getArticleLive()))
+                        ? ArticleManager.getSolutionList(fetchedQuestion.getTitleSlug(), project) : null;
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    // 慢請求期間 editor/project 可能已被關閉/dispose，避免在已 dispose 的 UI 上操作；
+                    // generation 不符代表已有更新的載入蓋過本次，捨棄過期結果
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    buildComponent(fetchedQuestion, fetchedSolutionList, defaultSlug);
+                });
+            } catch (Exception e) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    mySplitter.setFirstComponent(new JBLabel(String.valueOf(e.getMessage())));
+                });
+            }
+        });
+    }
+
+    private void buildComponent(Question fetchedQuestion, List<Solution> fetchedSolutionList, String defaultSlug) {
+        {
+            try {
+                question = fetchedQuestion;
 
                 if (question == null || Constant.ARTICLE_LIVE_NONE.equals(question.getArticleLive())) {
                     mySplitter.setFirstComponent(new JBLabel("No question or no solution"));
                 } else if (Constant.ARTICLE_LIVE_ONE.equals(question.getArticleLive())) {
+                    // 清掉 first pane 的 "Loading......"（對齊舊碼 finally 的 remove），否則切回 SPLIT/FIRST 版面會殘留
+                    mySplitter.setFirstComponent(null);
                     openArticle();
                     myLayout = SplitFileEditor.SplitEditorLayout.SECOND;
                     adjustEditorsVisibility();
                 } else if (Constant.ARTICLE_LIVE_LIST.equals(question.getArticleLive())) {
-                    solutionList = ApplicationManager.getApplication().executeOnPooledThread(() -> ArticleManager.getSolutionList(question.getTitleSlug(), project)).get();
+                    solutionList = fetchedSolutionList;
                     if (CollectionUtils.isEmpty(solutionList)) {
                         mySplitter.setFirstComponent(new JBLabel("no solution"));
                     } else {
@@ -149,10 +184,8 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
                 myLayout = SplitFileEditor.SplitEditorLayout.FIRST;
                 adjustEditorsVisibility();
                 mySplitter.setFirstComponent(new JBLabel(e.getMessage()));
-            } finally {
-                mySplitter.remove(loadingLabel);
             }
-        });
+        }
     }
 
     private void openSelectedQuestion(List<Solution> solutionList, int row) {
@@ -169,10 +202,30 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
         }
     }
 
-    private void openArticle() throws InterruptedException, java.util.concurrent.ExecutionException {
-        File file = ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            return ArticleManager.openArticle(question.getTitleSlug(), question.getArticleSlug(), project, false);
-        }).get();
+    private void openArticle() {
+        mySplitter.setSecondComponent(new JBLabel("Loading......"));
+        int myGen = ++generation;
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                File file = ArticleManager.openArticle(question.getTitleSlug(), question.getArticleSlug(), project, false);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    showArticle(file);
+                });
+            } catch (Exception e) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    mySplitter.setSecondComponent(new JBLabel(String.valueOf(e.getMessage())));
+                });
+            }
+        });
+    }
+
+    private void showArticle(File file) {
         if (file == null || !file.exists()) {
             mySplitter.setSecondComponent(new JBLabel("no solution"));
         } else {
@@ -298,6 +351,7 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
 
     @Override
     public void dispose() {
+        disposed = true;
         if (fileEditor != null) {
             Disposer.dispose(fileEditor);
         }

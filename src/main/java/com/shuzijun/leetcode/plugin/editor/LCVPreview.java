@@ -125,6 +125,9 @@ public class LCVPreview extends UserDataHolderBase implements FileEditor {
         if (myPanel != null) {
             Disposer.dispose(myPanel);
         }
+        // ponytail: 釋放參照讓 JCEF 元件樹能被 GC；FileEditor 契約下 dispose() 後框架不會再呼叫 getComponent()
+        myPanel = null;
+        myHtmlPanelWrapper = null;
     }
 
     @Override

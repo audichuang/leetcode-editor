@@ -62,6 +62,13 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
 
     private boolean isLoad = false;
 
+    // 使用者只關閉此編輯器分頁時 project 不會 dispose，但 this 已 dispose，async 回呼需額外檢查
+    private volatile boolean disposed = false;
+
+    // 多個背景 worker（login reload/submit refresh/快速切換選列）可能亂序完成，
+    // 每次發起新背景載入就遞增，callback 套用結果前比對，只有最新一次會生效
+    private volatile int generation = 0;
+
     private List<Submission> submissionList;
     private JBTable table;
 
@@ -102,16 +109,42 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
 
     private void initComponent(String defaultId) {
         isLoad = true;
-        ApplicationManager.getApplication().invokeLater(() -> {
-            JBLabel loadingLabel = new JBLabel("Loading......");
-            mySplitter.setFirstComponent(loadingLabel);
+        int myGen = ++generation;
+        ApplicationManager.getApplication().invokeLater(() -> mySplitter.setFirstComponent(new JBLabel("Loading......")));
+        // 網路請求在背景執行緒完成，EDT 只負責組裝 UI
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                question = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project);
+                Question fetchedQuestion = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project);
+                List<Submission> fetchedSubmissionList = fetchedQuestion != null
+                        ? SubmissionManager.getSubmissionService(fetchedQuestion.getTitleSlug(), project) : null;
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    // 慢請求期間 editor/project 可能已被關閉/dispose，避免在已 dispose 的 UI 上操作；
+                    // generation 不符代表已有更新的載入蓋過本次，捨棄過期結果
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    buildComponent(fetchedQuestion, fetchedSubmissionList, defaultId);
+                });
+            } catch (Exception e) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    mySplitter.setFirstComponent(new JBLabel(String.valueOf(e.getMessage())));
+                });
+            }
+        });
+    }
+
+    private void buildComponent(Question fetchedQuestion, List<Submission> fetchedSubmissionList, String defaultId) {
+        {
+            try {
+                question = fetchedQuestion;
 
                 if (question == null) {
                     mySplitter.setFirstComponent(new JBLabel("No question"));
                 } else {
-                    submissionList = ApplicationManager.getApplication().executeOnPooledThread(() -> SubmissionManager.getSubmissionService(question.getTitleSlug(), project)).get();
+                    submissionList = fetchedSubmissionList;
                     if (CollectionUtils.isNotEmpty(submissionList)) {
                         table = new JBTable(new SubmissionsPanel.TableModel(submissionList));
                         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -162,11 +195,8 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
                 }
             } catch (Exception e) {
                 mySplitter.setFirstComponent(new JBLabel(e.getMessage()));
-            } finally {
-                mySplitter.remove(loadingLabel);
             }
-        });
-
+        }
     }
 
     private void openSelectedQuestion(List<Submission> submissionList, int row) {
@@ -180,8 +210,30 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
         }
     }
 
-    private void openSubmission(Submission submission) throws InterruptedException, java.util.concurrent.ExecutionException {
-        File file = ApplicationManager.getApplication().executeOnPooledThread(() -> SubmissionManager.openSubmission(submission, question.getTitleSlug(), project, false)).get();
+    private void openSubmission(Submission submission) {
+        mySplitter.setSecondComponent(new JBLabel("Loading......"));
+        int myGen = ++generation;
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                File file = SubmissionManager.openSubmission(submission, question.getTitleSlug(), project, false);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    showSubmission(file);
+                });
+            } catch (Exception e) {
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    mySplitter.setSecondComponent(new JBLabel(String.valueOf(e.getMessage())));
+                });
+            }
+        });
+    }
+
+    private void showSubmission(File file) {
         if (file == null || !file.exists()) {
             mySplitter.setSecondComponent(new JBLabel("no submission"));
         } else {
@@ -303,6 +355,7 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
 
     @Override
     public void dispose() {
+        disposed = true;
         if (fileEditor != null) {
             Disposer.dispose(fileEditor);
         }

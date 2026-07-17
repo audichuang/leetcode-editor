@@ -45,6 +45,13 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
 
     private boolean isLoad = false;
 
+    // 使用者只關閉此編輯器分頁時 project 不會 dispose，但 this 已 dispose，async 回呼需額外檢查
+    private volatile boolean disposed = false;
+
+    // 多個背景 worker（login reload/submit refresh/快速切換選列）可能亂序完成，
+    // 每次發起新背景載入就遞增，callback 套用結果前比對，只有最新一次會生效
+    private volatile int generation = 0;
+
     public NotePreview(Project project, LeetcodeEditor leetcodeEditor) {
         this.project = project;
         this.leetcodeEditor = leetcodeEditor;
@@ -64,35 +71,58 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
 
     private void initComponent() {
         isLoad = true;
+        int myGen = ++generation;
         NotePreview notePreview = this;
-        ApplicationManager.getApplication().invokeLater(() -> {
-            JBLabel loadingLabel = new JBLabel("Loading......");
-            myComponent.addToCenter(loadingLabel);
+        JBLabel loadingLabel = new JBLabel("Loading......");
+        ApplicationManager.getApplication().invokeLater(() -> myComponent.addToCenter(loadingLabel));
+        // 網路請求在背景執行緒完成，EDT 只負責組裝 UI
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
-                File file = ApplicationManager.getApplication().executeOnPooledThread(() -> NoteManager.show(leetcodeEditor.getTitleSlug(), project, false)).get();
-                if (file == null || !file.exists()) {
-                    myComponent.addToCenter(new JBLabel("No note"));
-                } else {
-                    VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
-                    FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
-
-                    if (editorProviders != null && editorProviders.length > 0) {
-                        fileEditor = editorProviders[0].createEditor(project, vf);
-                        Disposer.register(notePreview, fileEditor);
-                    } else {
-                        fileEditor = new PsiAwareTextEditorProvider().createEditor(project, vf);
-                        Disposer.register(notePreview, fileEditor);
+                File fetchedFile = NoteManager.show(leetcodeEditor.getTitleSlug(), project, false);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    // 慢請求期間 editor/project 可能已被關閉/dispose，避免在已 dispose 的 UI 上操作；
+                    // generation 不符代表已有更新的載入蓋過本次，捨棄過期結果
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
                     }
-                    myComponent.addToCenter(fileEditor.getComponent());
-                    myComponent.addToTop(createToolbarWrapper(fileEditor.getComponent()));
-
-                }
+                    buildComponent(notePreview, fetchedFile, loadingLabel);
+                });
             } catch (Exception e) {
-                myComponent.addToCenter(new JBLabel(e.getMessage()));
-            } finally {
-                myComponent.remove(loadingLabel);
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || disposed || myGen != generation) {
+                        return;
+                    }
+                    myComponent.remove(loadingLabel);
+                    myComponent.addToCenter(new JBLabel(String.valueOf(e.getMessage())));
+                });
             }
         });
+    }
+
+    private void buildComponent(NotePreview notePreview, File file, JBLabel loadingLabel) {
+        try {
+            if (file == null || !file.exists()) {
+                myComponent.addToCenter(new JBLabel("No note"));
+            } else {
+                VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
+                FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
+
+                if (editorProviders != null && editorProviders.length > 0) {
+                    fileEditor = editorProviders[0].createEditor(project, vf);
+                    Disposer.register(notePreview, fileEditor);
+                } else {
+                    fileEditor = new PsiAwareTextEditorProvider().createEditor(project, vf);
+                    Disposer.register(notePreview, fileEditor);
+                }
+                myComponent.addToCenter(fileEditor.getComponent());
+                myComponent.addToTop(createToolbarWrapper(fileEditor.getComponent()));
+
+            }
+        } catch (Exception e) {
+            myComponent.addToCenter(new JBLabel(e.getMessage()));
+        } finally {
+            myComponent.remove(loadingLabel);
+        }
     }
 
 
@@ -170,6 +200,7 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
 
     @Override
     public void dispose() {
+        disposed = true;
         if (fileEditor != null) {
             Disposer.dispose(fileEditor);
         }
