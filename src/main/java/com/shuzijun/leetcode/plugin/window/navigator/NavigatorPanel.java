@@ -237,6 +237,11 @@ public class NavigatorPanel extends SimpleToolWindowPanel implements NavigatorPa
                 }
                 QuestionIndex questionIndex = QuestionManager.getQuestionIndex(slug);
                 if (questionIndex == null) {
+                    // 全量題庫可能還在背景預抓，這裡同步補抓一次（本方法一律在背景緒執行）
+                    QuestionManager.getQuestionAllService(myProject, false);
+                    questionIndex = QuestionManager.getQuestionIndex(slug);
+                }
+                if (questionIndex == null) {
                     return false;
                 }
                 getFind().operationType("");
@@ -244,7 +249,8 @@ public class NavigatorPanel extends SimpleToolWindowPanel implements NavigatorPa
                 navigatorTable.getPageInfo().clear();
 
                 navigatorTable.getPageInfo().getFilters().setSearchKeywords("");
-                queryField.setText("");
+                // position() 在背景緒(Task.Backgroundable)執行，Swing 元件須切回 EDT 才能改
+                ApplicationManager.getApplication().invokeLater(() -> queryField.setText(""));
 
                 navigatorTable.getPageInfo().setPageIndex((questionIndex.getIndex() / navigatorTable.getPageInfo().getPageSize()) + 1);
                 ViewManager.loadServiceData(this, myProject, slug);
