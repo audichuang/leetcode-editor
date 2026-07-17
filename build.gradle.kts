@@ -5,7 +5,7 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 plugins {
     id("java") // Java support
     alias(libs.plugins.kotlin) // Kotlin support
-    alias(libs.plugins.intelliJPlatform) version "2.7.1" // IntelliJ Platform Gradle Plugin
+    alias(libs.plugins.intelliJPlatform) // IntelliJ Platform Gradle Plugin
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
 }
 
@@ -14,7 +14,7 @@ version = System.getenv("LD_VERSION") ?: providers.gradleProperty("pluginVersion
 
 // Set the JVM language level used to build the project.
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 // Configure project's dependencies
@@ -32,8 +32,8 @@ repositories {
 // Dependencies are managed with Gradle version catalog - read more: https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog
 dependencies {
     api("com.shuzijun:lc-sdk:0.0.3")
-    api("com.alibaba:fastjson:1.2.47")
-    api("org.jsoup:jsoup:1.11.3")
+    api("com.alibaba:fastjson:1.2.83")
+    api("org.jsoup:jsoup:1.15.4")
     api("io.sentry:sentry:1.7.9") {
         exclude(module = "slf4j-api")
     }
@@ -71,7 +71,7 @@ intellijPlatform {
         version = project.version.toString()
 
         // Extract the <!-- Plugin description --> section from README.md and provide for the plugin's manifest
-        description = providers.fileContents(layout.projectDirectory.file(providers.gradleProperty("pluginDescription").get())).toString()
+        description = providers.fileContents(layout.projectDirectory.file(providers.gradleProperty("pluginDescription").get())).asText.get()
 
         val changelog = project.changelog // local variable for configuration cache compatibility
         // Get the latest available change notes from the changelog file
