@@ -6,6 +6,7 @@ import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,13 +29,18 @@ public class HttpRequest {
 
     private String cacheParam;
 
-    private HttpRequest(String url, String body, String contentType, Map<String, String> header, boolean cache, String cacheParam) {
+    private final Type type;
+
+    private HttpRequest(String url, String body, String contentType, Map<String, String> header, boolean cache, String cacheParam, Type type) {
         this.url = url;
         this.body = body;
         this.contentType = contentType;
-        this.header = header;
+        // defensive copy: builder 的 header map 是 mutable 且已交給呼叫端(getHeader())，
+        // build() 後若原 map 被改動會讓已入快取的 key hash 跟著漂移
+        this.header = new HashMap<>(header);
         this.cache = cache;
         this.cacheParam = cacheParam;
+        this.type = type;
     }
 
     public String getUrl() {
@@ -50,7 +56,8 @@ public class HttpRequest {
     }
 
     public Map<String, String> getHeader() {
-        return header;
+        // 不可變視圖：防止呼叫端拿到 map 後修改，動到已入快取的 key hash
+        return Collections.unmodifiableMap(header);
     }
 
     public boolean isCache() {
@@ -69,12 +76,13 @@ public class HttpRequest {
 
         HttpRequest that = (HttpRequest) o;
 
-        return new EqualsBuilder().append(url, that.url).append(body, that.body).append(contentType, that.contentType).append(header, that.header).append(cacheParam, that.cacheParam).isEquals();
+        // method 納入 cache key：否則同 url+body 的 GET 與 POST 會被誤判成同一筆快取
+        return new EqualsBuilder().append(url, that.url).append(body, that.body).append(contentType, that.contentType).append(header, that.header).append(cacheParam, that.cacheParam).append(type, that.type).isEquals();
     }
 
     @Override
     public int hashCode() {
-        return new HashCodeBuilder(17, 37).append(url).append(body).append(contentType).append(header).append(cacheParam).toHashCode();
+        return new HashCodeBuilder(17, 37).append(url).append(body).append(contentType).append(header).append(cacheParam).append(type).toHashCode();
     }
 
     public static HttpRequest.HttpRequestBuilder builderGet(String url) {
@@ -146,13 +154,17 @@ public class HttpRequest {
         }
 
         public HttpRequestBuilder cacheParam(String cacheParam) {
-            this.cacheParam = cacheParam;
-            this.cache = true;
+            // null 表示未選擇快取：Graphql.request() 對所有請求都會呼叫本方法，
+            // 無條件開快取會讓 userStatus/randomQuestion 等即時性請求吃到過期回應（上游 #763 根因）
+            if (cacheParam != null) {
+                this.cacheParam = cacheParam;
+                this.cache = true;
+            }
             return this;
         }
 
         public HttpRequest build() {
-            return new HttpRequest(url, body, contentType, header, cache, cacheParam);
+            return new HttpRequest(url, body, contentType, header, cache, cacheParam, type);
         }
 
         @NotNull

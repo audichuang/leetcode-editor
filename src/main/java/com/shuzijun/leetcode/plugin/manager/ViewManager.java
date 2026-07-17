@@ -21,7 +21,8 @@ public class ViewManager {
     }
 
     public static void loadServiceData(NavigatorAction navigatorAction, Project project, String selectTitleSlug) {
-        QuestionManager.getQuestionAllService(project, false);
+        // 全量題庫只給定位(position)用，非同步預抓即可，別讓分頁清單等它
+        ApplicationManager.getApplication().executeOnPooledThread(() -> QuestionManager.getQuestionAllService(project, false));
         PageInfo pageInfo = QuestionManager.getQuestionViewList(project, navigatorAction.getPageInfo());
         if ((pageInfo.getRows() == null || pageInfo.getRows().isEmpty()) && pageInfo.getRowTotal() != 0) {
             MessageUtils.getInstance(project).showErrorMsg("error", PropertiesUtils.getInfo("response.question"));
@@ -94,6 +95,11 @@ public class ViewManager {
         boolean searchKeywords = StringUtils.isNotBlank(filters.getSearchKeywords());
         boolean difficulty = StringUtils.isNotBlank(filters.getDifficulty());
         boolean status = StringUtils.isNotBlank(filters.getStatus());
+        Integer difficultyLevel = null;
+        if (difficulty) {
+            List<String> difficultyList = FindManager.getDifficulty().stream().map(t -> t.getSlug()).collect(Collectors.toList());
+            difficultyLevel = difficultyList.indexOf(filters.getDifficulty()) + 1;
+        }
 
         List<QuestionView> conformList = new ArrayList<>();
         QuestionView dayQuestion = QuestionManager.questionOfToday();
@@ -111,12 +117,8 @@ public class ViewManager {
                     || questionView.getTitle().contains(filters.getSearchKeywords()) || questionView.getTitleSlug().contains(filters.getSearchKeywords()))) {
                 continue;
             }
-            if (difficulty) {
-                List<String> difficultyList = FindManager.getDifficulty().stream().map(t -> t.getSlug()).collect(Collectors.toList());
-                Integer level = difficultyList.indexOf(filters.getDifficulty()) + 1;
-                if (!questionView.getLevel().equals(level)) {
-                    continue;
-                }
+            if (difficulty && !questionView.getLevel().equals(difficultyLevel)) {
+                continue;
             }
             if (status) {
                 if ("TRIED".equalsIgnoreCase(filters.getStatus()) && !questionView.getStatusSign().equalsIgnoreCase("?")) {

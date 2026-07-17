@@ -26,9 +26,11 @@ import java.net.CookieHandler;
 import java.net.CookieManager;
 import java.net.HttpCookie;
 import java.net.PasswordAuthentication;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,7 +38,13 @@ import java.util.concurrent.TimeUnit;
  */
 public class HttpRequestUtils {
 
-    private static final Cache<String, HttpResponse> httpResponseCache = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.SECONDS).build();
+    // ponytail: 上限單位從「筆數」改成「位元組」，避免少數大 body（如 allQuestions ~2MB）把 200 個 slot 撐成數百MB；
+    // weigher 用 UTF-8 位元組數（而非 String.length() 的 UTF-16 字元數），CJK body 才不會被低估近半；
+    // 其餘 LRU/TTL/per-key 載入鎖語意不變，只是淘汰依據換了計量單位
+    private static final Cache<HttpRequest, HttpResponse> httpResponseCache = CacheBuilder.newBuilder()
+            .maximumWeight(32L * 1024 * 1024)
+            .weigher((HttpRequest k, HttpResponse v) -> v.getBody() == null ? 0 : v.getBody().getBytes(StandardCharsets.UTF_8).length)
+            .expireAfterWrite(30, TimeUnit.SECONDS).build();
 
     private static MyExecutorHttp executorHttp = new MyExecutorHttp();
     private static LcClient enLcClient = LcClient.builder(HttpClient.SiteEnum.EN).executorHttp(executorHttp).build();
@@ -82,7 +90,7 @@ public class HttpRequestUtils {
                 return buildResp(executorHttp.executeGet(builder.build()), httpResponse);
 
             } catch (LcException e) {
-                LogUtils.LOG.error("HttpRequestUtils request error:", e);
+                LogUtils.LOG.warn("HttpRequestUtils request error:", e);
                 httpResponse.setStatusCode(-1);
             }
             return httpResponse;
@@ -103,7 +111,7 @@ public class HttpRequestUtils {
                 }
                 return buildResp(executorHttp.executePost(builder.build()), httpResponse);
             } catch (LcException e) {
-                LogUtils.LOG.error("HttpRequestUtils request error:", e);
+                LogUtils.LOG.warn("HttpRequestUtils request error:", e);
                 httpResponse.setStatusCode(-1);
             }
             return httpResponse;
@@ -121,7 +129,7 @@ public class HttpRequestUtils {
                 }
                 return buildResp(executorHttp.executePut(builder.build()), httpResponse);
             } catch (LcException e) {
-                LogUtils.LOG.error("HttpRequestUtils request error:", e);
+                LogUtils.LOG.warn("HttpRequestUtils request error:", e);
                 httpResponse.setStatusCode(-1);
             }
             return httpResponse;
@@ -150,54 +158,99 @@ public class HttpRequestUtils {
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
     }
 
+    public static void invalidateCache() {
+        httpResponseCache.invalidateAll();
+    }
 
-    private static class CacheProcessor {
-        public static HttpResponse processor(HttpRequest httpRequest, HttpRequestUtils.Callable<HttpResponse> callable) {
 
-            String key = httpRequest.hashCode() + "";
-            if (httpRequest.isCache() && httpResponseCache.getIfPresent(key) != null) {
-                return httpResponseCache.getIfPresent(key);
-            }
-            if (httpRequest.isCache()) {
-                synchronized (key.intern()) {
-                    if (httpResponseCache.getIfPresent(key) != null) {
-                        return httpResponseCache.getIfPresent(key);
-                    } else {
-                        HttpResponse httpResponse = callable.call(httpRequest);
-                        if (httpResponse.getStatusCode() == 200) {
-                            httpResponseCache.put(key, httpResponse);
-                        }
-                        return httpResponse;
-                    }
-                }
-            } else {
+    static class CacheProcessor {
+        static HttpResponse processor(HttpRequest httpRequest, HttpRequestUtils.Callable<HttpResponse> callable) {
+
+            if (!httpRequest.isCache()) {
                 return callable.call(httpRequest);
-
+            }
+            try {
+                // 直接用 httpRequest 當 key：它已正確實作 equals/hashCode（url+body+contentType+header+cacheParam），
+                // Guava 用 equals 比對，不會像純 hashCode 字串 key 那樣發生碰撞誤命中。
+                // Guava get(key, loader) 自帶 per-key 載入鎖，load-once
+                return httpResponseCache.get(httpRequest, () -> {
+                    HttpResponse httpResponse = callable.call(httpRequest);
+                    if (httpResponse.getStatusCode() != 200) {
+                        // 非 200 不寫入快取，透過例外把回應帶出去
+                        throw new UncachedResponseException(httpResponse);
+                    }
+                    return httpResponse;
+                });
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof UncachedResponseException) {
+                    return ((UncachedResponseException) e.getCause()).response;
+                }
+                throw new RuntimeException(e.getCause());
             }
         }
     }
 
+    private static class UncachedResponseException extends Exception {
+        private final HttpResponse response;
+
+        private UncachedResponseException(HttpResponse response) {
+            this.response = response;
+        }
+    }
+
     @FunctionalInterface
-    private interface Callable<V> {
+    interface Callable<V> {
         V call(HttpRequest request);
     }
 
 
     private static class MyExecutorHttp extends DefaultExecutoHttp {
+
+        // lc-sdk 預設 timeout 為 connect 600s / read+write 1800s，慢連線會掛住半小時，改為合理值
+        private volatile OkHttpClient directClient;
+        // key 與 client 合併成單一 immutable holder，用單一 volatile 欄位原子發布，
+        // 避免並行請求讀到「client B + key A」的撕裂狀態而命中沒有正確 authenticator 的 client
+        private volatile ProxyHolder proxyHolder;
+
+        private static final class ProxyHolder {
+            private final String key;
+            private final OkHttpClient client;
+
+            private ProxyHolder(String key, OkHttpClient client) {
+                this.key = key;
+                this.client = client;
+            }
+        }
+
+        private OkHttpClient getDirectClient() {
+            if (directClient == null) {
+                directClient = newDefaultHttpClient(10, 30, 30);
+            }
+            return directClient;
+        }
+
         @Override
         public OkHttpClient getRequestClient() {
             final HttpConfigurable httpConfigurable = HttpConfigurable.getInstance();
             if (!httpConfigurable.USE_HTTP_PROXY && !httpConfigurable.USE_PROXY_PAC) {
-                return super.getRequestClient();
+                return getDirectClient();
+            }
+            String key = httpConfigurable.USE_HTTP_PROXY + "|" + httpConfigurable.USE_PROXY_PAC + "|" + httpConfigurable.PROXY_AUTHENTICATION
+                    + "|" + httpConfigurable.PROXY_HOST + ":" + httpConfigurable.PROXY_PORT;
+            ProxyHolder holder = proxyHolder;
+            if (holder != null && key.equals(holder.key)) {
+                return holder.client;
             }
             final IdeaWideProxySelector ideaWideProxySelector = new IdeaWideProxySelector(httpConfigurable);
-            OkHttpClient.Builder builder = super.getRequestClient().newBuilder().proxySelector(ideaWideProxySelector);
+            OkHttpClient.Builder builder = getDirectClient().newBuilder().proxySelector(ideaWideProxySelector);
             if (httpConfigurable.PROXY_AUTHENTICATION) {
                 final MyAuthenticator ideaWideAuthenticator = new MyAuthenticator(httpConfigurable);
                 final okhttp3.Authenticator proxyAuthenticator = getProxyAuthenticator(ideaWideAuthenticator);
                 builder.proxyAuthenticator(proxyAuthenticator);
             }
-            return builder.build();
+            OkHttpClient built = builder.build();
+            proxyHolder = new ProxyHolder(key, built);
+            return built;
         }
 
         private okhttp3.Authenticator getProxyAuthenticator(MyAuthenticator ideaWideAuthenticator) {

@@ -2,6 +2,7 @@ package com.shuzijun.leetcode.plugin.manager;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.shuzijun.leetcode.plugin.model.Constant;
 import com.shuzijun.leetcode.plugin.model.Graphql;
@@ -81,60 +82,47 @@ public class ArticleManager {
 
     public static List<Solution> getSolutionList(String titleSlug, Project project) {
         List<Solution> solutionList = new ArrayList<>();
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
-        try {
-            int pageCount = 4;
-            CountDownLatch latch = new CountDownLatch(pageCount);
-            List<Solution>[] results = new List[pageCount];
+        int pageCount = 4;
+        List<Future<List<Solution>>> futures = new ArrayList<>(pageCount);
 
-            for (int i = 0; i < pageCount; i++) {
-                int pageIndex = i;
-                int skip = pageIndex * 30;
-                executorService.submit(() -> {
-                    try {
-                        List<Solution> solutions = new ArrayList<>();
-                        HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("questionSolutionArticles").
-                                variables("questionSlug", titleSlug).variables("first", 30).variables("skip", skip).variables("orderBy", "DEFAULT").request();
-                        if (response.getStatusCode() == 200) {
-                            JSONArray edges = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("questionSolutionArticles").getJSONArray("edges");
-                            for (int j = 0; j < edges.size(); j++) {
-                                JSONObject node = edges.getJSONObject(j).getJSONObject("node");
-                                Solution solution = new Solution();
-                                solution.setTitle(node.getString("title"));
-                                solution.setSlug(node.getString("slug"));
-                                solution.setSummary(node.getString("summary"));
+        for (int i = 0; i < pageCount; i++) {
+            int skip = i * 30;
+            futures.add(ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                List<Solution> solutions = new ArrayList<>();
+                HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("questionSolutionArticles").
+                        variables("questionSlug", titleSlug).variables("first", 30).variables("skip", skip).variables("orderBy", "DEFAULT").request();
+                if (response.getStatusCode() == 200) {
+                    JSONArray edges = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("questionSolutionArticles").getJSONArray("edges");
+                    for (int j = 0; j < edges.size(); j++) {
+                        JSONObject node = edges.getJSONObject(j).getJSONObject("node");
+                        Solution solution = new Solution();
+                        solution.setTitle(node.getString("title"));
+                        solution.setSlug(node.getString("slug"));
+                        solution.setSummary(node.getString("summary"));
 
-                                StringBuilder tagsSb = new StringBuilder();
-                                JSONArray tags = node.getJSONArray("tags");
-                                for (int k = 0; k < tags.size(); k++) {
-                                    tagsSb.append("[").append(tags.getJSONObject(k).getString("name")).append("] ");
-                                }
-                                solution.setTags(tagsSb.toString());
-                                solutions.add(solution);
-                            }
-                            results[pageIndex] = solutions;
-                        } else {
-                            MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
+                        StringBuilder tagsSb = new StringBuilder();
+                        JSONArray tags = node.getJSONArray("tags");
+                        for (int k = 0; k < tags.size(); k++) {
+                            tagsSb.append("[").append(tags.getJSONObject(k).getString("name")).append("] ");
                         }
-                    } finally {
-                        latch.countDown();
+                        solution.setTags(tagsSb.toString());
+                        solutions.add(solution);
                     }
-                });
-            }
-
-            latch.await();
-            for (List<Solution> pageResult : results) {
-                if (pageResult != null) {
-                    solutionList.addAll(pageResult);
+                } else {
+                    MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
                 }
+                return solutions;
+            }));
+        }
+
+        for (Future<List<Solution>> future : futures) {
+            try {
+                solutionList.addAll(future.get());
+            } catch (Exception e) {
+                LogUtils.LOG.error("solutionList acquisition failed", e);
+                MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
             }
-        } catch (Exception e) {
-            LogUtils.LOG.error("solutionList acquisition failed", e);
-            MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
-        } finally {
-            executorService.shutdown();
         }
         return solutionList;
-
     }
 }

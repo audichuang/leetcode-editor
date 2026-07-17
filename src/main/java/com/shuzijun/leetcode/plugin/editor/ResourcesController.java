@@ -18,6 +18,8 @@ public class ResourcesController extends BaseController {
 
     private static final Logger LOG = Logger.getInstance(ResourcesController.class);
 
+    private static final java.util.concurrent.ConcurrentHashMap<String, byte[]> resourceCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     private final String controllerPath = "resources";
 
     @Override
@@ -28,15 +30,18 @@ public class ResourcesController extends BaseController {
     @Override
     public FullHttpResponse get(@NotNull QueryStringDecoder urlDecoder, @NotNull FullHttpRequest request, @NotNull ChannelHandlerContext context) {
         String resourceName = getResourceName(urlDecoder);
-        byte[] data;
-        try (InputStream inputStream = PreviewStaticServer.class.getResourceAsStream(resourceName)) {
-            if (inputStream == null) {
-                return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND, Unpooled.EMPTY_BUFFER);
+        byte[] data = resourceCache.get(resourceName);
+        if (data == null) {
+            try (InputStream inputStream = PreviewStaticServer.class.getResourceAsStream(resourceName)) {
+                if (inputStream == null) {
+                    return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND, Unpooled.EMPTY_BUFFER);
+                }
+                data = FileUtilRt.loadBytes(inputStream);
+                resourceCache.put(resourceName, data);
+            } catch (IOException e) {
+                LOG.warn(e);
+                return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
             }
-            data = FileUtilRt.loadBytes(inputStream);
-        } catch (IOException e) {
-            LOG.warn(e);
-            return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.INTERNAL_SERVER_ERROR, Unpooled.EMPTY_BUFFER);
         }
 
         FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, Unpooled.wrappedBuffer(data));

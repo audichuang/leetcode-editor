@@ -5,7 +5,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Maps;
-import com.intellij.openapi.application.ApplicationManager;
+import com.google.common.util.concurrent.Striped;
 import com.intellij.openapi.project.Project;
 import com.shuzijun.leetcode.plugin.model.*;
 import com.shuzijun.leetcode.plugin.setting.PersistentConfig;
@@ -14,10 +14,11 @@ import com.shuzijun.leetcode.plugin.utils.doc.CleanMarkdown;
 import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 
 /**
  * @author shuzijun
@@ -25,9 +26,23 @@ import java.util.concurrent.TimeUnit;
 public class QuestionManager {
 
     private static final Cache<String, QuestionView> dayMap = CacheBuilder.newBuilder().maximumSize(5).expireAfterWrite(2, TimeUnit.DAYS).build();
-    private static final Cache<String, Question> questionCache = CacheBuilder.newBuilder().maximumSize(30).build();
-    private static final Cache<String, List<QuestionView>> questionAllCache = CacheBuilder.newBuilder().expireAfterWrite(2, TimeUnit.DAYS).build();
-    private static final Map<String, Map<String, Integer>> questionIndexCache = Maps.newLinkedHashMap();
+    private static final Cache<String, Question> questionCache = CacheBuilder.newBuilder().maximumSize(100).build();
+    // list 與 index 包成單一 immutable holder 一起放進 cache，兩者原子發布，避免讀到「新 index + 舊 list」的撕裂組合
+    private static final Cache<String, AllHolder> questionAllCache = CacheBuilder.newBuilder().expireAfterWrite(2, TimeUnit.DAYS).build();
+    // 固定 64 個鎖，slug/key 用雜湊分桶共用鎖，鎖數量不再隨查過的 slug 無限成長
+    private static final Striped<Lock> keyLocks = Striped.lock(64);
+    // 帳號/session 切換 (invalidateAll) 時遞增；在途的 getQuestionAllService 大請求發現世代已變就放棄寫回，避免覆蓋新帳號的快取
+    private static volatile int generation = 0;
+
+    private static final class AllHolder {
+        private final List<QuestionView> list;
+        private final Map<String, Integer> index;
+
+        private AllHolder(List<QuestionView> list, Map<String, Integer> index) {
+            this.list = list;
+            this.index = index;
+        }
+    }
 
 
     public static PageInfo<QuestionView> getQuestionViewList(Project project, PageInfo<QuestionView> pageInfo) {
@@ -54,6 +69,10 @@ public class QuestionManager {
             pageInfo.setRows(questionList);
         } else {
             LogUtils.LOG.error("Request question list failed, status:" + response.getStatusCode());
+            if (response.getStatusCode() == -1) {
+                // HttpRequestUtils 對網路失敗回 -1；帶上 IOException cause 讓 AbstractAction 的 cause 鏈偵測命中，顯示友好提示而非 IDE Internal Error
+                throw new RuntimeException("Request question list failed", new IOException("network error, status -1"));
+            }
             throw new RuntimeException("Request question list failed");
         }
 
@@ -67,9 +86,13 @@ public class QuestionManager {
         if (user != null) {
             isPremium = user.isPremium();
         }
+        // 快照世代；寫回前若世代已變（帳號切換觸發了 invalidateAll），放棄寫回避免覆蓋新帳號的快取
+        int gen = generation;
         if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null || reset) {
             String key = URLUtils.getLeetcodeHost() + "getQuestionAll";
-            synchronized (key.intern()) {
+            Lock lock = keyLocks.get(key);
+            lock.lock();
+            try {
                 if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null || reset) {
                     HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("allQuestions")
                             .cacheParam(WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser().getUsername()).request();
@@ -99,29 +122,37 @@ public class QuestionManager {
                             questionIndex.put(questionViews.get(i).getTitleSlug(), i);
                         }
 
-                        questionAllCache.put(URLUtils.getLeetcodeHost(), questionViews);
-                        questionIndexCache.put(URLUtils.getLeetcodeHost(), questionIndex);
+                        // list 與 index 同一個 holder 一次 put，讀取端不會拿到兩者不同源的組合
+                        if (gen == generation) {
+                            questionAllCache.put(URLUtils.getLeetcodeHost(), new AllHolder(questionViews, questionIndex));
+                        }
                     } else {
                         questionAllCache.invalidate(URLUtils.getLeetcodeHost());
-                        questionIndexCache.remove(URLUtils.getLeetcodeHost());
                     }
                 }
+            } finally {
+                lock.unlock();
             }
         }
-        return questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
+        AllHolder holder = questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
+        return holder == null ? null : holder.list;
     }
 
     public static QuestionIndex getQuestionIndex(String titleSlug) {
-        if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null) {
+        // list 與 index 來自同一個 holder，保證同源，不會出現「新 index + 舊 list」
+        AllHolder holder = questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
+        if (holder == null || !holder.index.containsKey(titleSlug)) {
             return null;
-        } else if (!questionIndexCache.get(URLUtils.getLeetcodeHost()).containsKey(titleSlug)) {
-            return null;
-        } else {
-            QuestionIndex questionIndex = new QuestionIndex();
-            questionIndex.setIndex(questionIndexCache.get(URLUtils.getLeetcodeHost()).get(titleSlug));
-            questionIndex.setQuestionView(questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()).get(questionIndex.getIndex()));
-            return questionIndex;
         }
+        Integer index = holder.index.get(titleSlug);
+        if (index == null || index >= holder.list.size()) {
+            // 邊界保護保留：理論上同源 holder 不會越界，仍防禦性檢查避免 IndexOutOfBoundsException
+            return null;
+        }
+        QuestionIndex questionIndex = new QuestionIndex();
+        questionIndex.setIndex(index);
+        questionIndex.setQuestionView(holder.list.get(index));
+        return questionIndex;
     }
 
     private static List<QuestionView> parseQuestion(String str, Boolean isPremium) {
@@ -164,6 +195,15 @@ public class QuestionManager {
         question.setTitleSlug(object.getString("titleSlug"));
         question.setLevel(object.getString("difficulty"));
         return question;
+    }
+
+    public static void invalidateAll() {
+        // 帳號/session 切換時，題目狀態、內容與索引都是舊帳號的資料，必須整批作廢
+        questionCache.invalidateAll();
+        questionAllCache.invalidateAll();
+        dayMap.invalidateAll();
+        // 遞增世代，讓帳號切換前已發出、尚在途的 getQuestionAllService 請求發現世代已變而放棄寫回
+        generation++;
     }
 
     public static QuestionView questionOfToday() {
@@ -328,18 +368,17 @@ public class QuestionManager {
         }
         String key = URLUtils.getLeetcodeHost() + titleSlug;
         if (questionCache.getIfPresent(key) == null) {
-            synchronized (key.intern()) {
+            if (readOnlyCache) {
+                return null;
+            }
+            Lock lock = keyLocks.get(key);
+            lock.lock();
+            try {
                 if (questionCache.getIfPresent(key) == null) {
                     try {
                         Question question = new Question();
                         question.setTitleSlug(titleSlug);
-                        Future<Boolean> questionFuture = ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                            return getQuestion(question, project);
-                        });
-                        if (readOnlyCache) {
-                            return null;
-                        }
-                        if (questionFuture.get()) {
+                        if (getQuestion(question, project)) {
                             questionCache.put(key, question);
                         } else {
                             return null;
@@ -348,6 +387,8 @@ public class QuestionManager {
                         return null;
                     }
                 }
+            } finally {
+                lock.unlock();
             }
         }
         return questionCache.getIfPresent(key);

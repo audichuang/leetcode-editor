@@ -119,8 +119,12 @@ public class Graphql {
         }
 
         public GraphqlBuilder cacheParam(String cacheParam) {
-            this.cacheParam = cacheParam;
-            this.cache = true;
+            // null 表示未選擇快取：request() 對所有請求都會呼叫本方法，
+            // 無條件開快取會讓 userStatus 等即時性請求吃到過期回應
+            if (cacheParam != null) {
+                this.cacheParam = cacheParam;
+                this.cache = true;
+            }
             return this;
         }
 
