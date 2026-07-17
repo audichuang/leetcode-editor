@@ -3,6 +3,7 @@ package com.shuzijun.leetcode.plugin.setting;
 import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.Credentials;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.*;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import com.shuzijun.leetcode.plugin.model.Config;
@@ -34,7 +35,7 @@ public class PersistentConfig implements PersistentStateComponent<PersistentConf
 
 
     public static PersistentConfig getInstance() {
-        return ServiceManager.getService(PersistentConfig.class);
+        return ApplicationManager.getApplication().getService(PersistentConfig.class);
     }
 
     @Nullable

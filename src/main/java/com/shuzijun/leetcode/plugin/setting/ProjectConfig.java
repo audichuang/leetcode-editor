@@ -45,6 +45,7 @@ public class ProjectConfig implements PersistentStateComponent<ProjectConfig.Inn
         while (iter.hasNext()) {
             String key = iter.next();
             LeetcodeEditor leetcodeEditor = this.innerState.projectConfig.get(key);
+            // 不可用 File.exists() 修剪：路徑暫時不可用（網路磁碟未掛載）會把有效綁定永久刪除
             if (StringUtils.isBlank(leetcodeEditor.getFrontendQuestionId())) {
                 iter.remove();
                 continue;

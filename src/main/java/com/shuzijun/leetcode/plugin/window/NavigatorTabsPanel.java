@@ -18,6 +18,7 @@ import com.shuzijun.leetcode.plugin.model.User;
 import com.shuzijun.leetcode.plugin.setting.PersistentConfig;
 import com.shuzijun.leetcode.plugin.setting.StatisticsData;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
+import com.shuzijun.leetcode.plugin.utils.HttpRequestUtils;
 import com.shuzijun.leetcode.plugin.utils.LogUtils;
 import com.shuzijun.leetcode.plugin.utils.URLUtils;
 import com.shuzijun.leetcode.plugin.window.navigator.AllNavigatorPanel;
@@ -216,6 +217,10 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
     }
 
     public static synchronized void loadUser(boolean login) {
+        // 登入/登出後帳號狀態已變，殘留的 HTTP 快取（userStatus、清單）一律作廢
+        HttpRequestUtils.invalidateCache();
+        // QuestionManager 的 questionCache/questionAllCache/questionIndexCache/dayMap 也是舊帳號資料，一併清空
+        QuestionManager.invalidateAll();
         User user = null;
         if (login) {
             for (int i = 0; i <= 50; i++) {
@@ -251,7 +256,7 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
             K otherKey = null;
             for (Object k : this.keySet()) {
                 if (!k.equals(key)) {
-                    otherKey = key;
+                    otherKey = (K) k;
                     break;
                 }
             }

@@ -214,6 +214,8 @@ public class CodeManager {
                         String body = response.getBody();
                         JSONObject jsonObject = JSONObject.parseObject(body);
                         if ("SUCCESS".equals(jsonObject.getString("state"))) {
+                            // 提交已成立，伺服器端資料已變，作廢快取讓 submissions/進度立即反映
+                            HttpRequestUtils.invalidateCache();
                             if (jsonObject.getBoolean("run_success")) {
                                 if (Integer.valueOf(10).equals(jsonObject.getInteger("status_code"))) {
                                     String runtime = jsonObject.getString("status_runtime");
