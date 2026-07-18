@@ -3,7 +3,6 @@ package com.shuzijun.leetcode.plugin.utils;
 import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.impl.ApplicationInfoImpl;
 import com.intellij.openapi.extensions.PluginId;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
@@ -50,7 +49,7 @@ public class SentryUtils {
 
         final SentryClient sentry = getSentryClient();
 
-        final ApplicationInfoImpl applicationInfo = (ApplicationInfoImpl) ApplicationInfo.getInstance();
+        final ApplicationInfo applicationInfo = ApplicationInfo.getInstance();
 
         final Map<String, Object> os = new HashMap<>();
         os.put("name", SystemInfo.OS_NAME);
