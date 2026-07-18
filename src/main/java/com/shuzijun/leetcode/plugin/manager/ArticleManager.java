@@ -93,21 +93,34 @@ public class ArticleManager {
                         variables("questionSlug", titleSlug).variables("first", 30).variables("skip", skip).variables("orderBy", "DEFAULT")
                         .cacheParam(titleSlug).request();
                 if (response.getStatusCode() == 200) {
-                    JSONArray edges = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("questionSolutionArticles").getJSONArray("edges");
-                    for (int j = 0; j < edges.size(); j++) {
-                        JSONObject node = edges.getJSONObject(j).getJSONObject("node");
-                        Solution solution = new Solution();
-                        solution.setTitle(node.getString("title"));
-                        solution.setSlug(node.getString("slug"));
-                        solution.setSummary(node.getString("summary"));
+                    JSONObject responseObj = JSONObject.parseObject(response.getBody());
+                    JSONObject data = responseObj == null ? null : responseObj.getJSONObject("data");
+                    JSONObject questionSolutionArticles = data == null ? null : data.getJSONObject("questionSolutionArticles");
+                    JSONArray edges = questionSolutionArticles == null ? null : questionSolutionArticles.getJSONArray("edges");
+                    if (edges == null) {
+                        LogUtils.LOG.warn("solutionList page parse failed, questionSlug:" + titleSlug + ";skip:" + skip + ";body:" + response.getBody());
+                    } else {
+                        for (int j = 0; j < edges.size(); j++) {
+                            JSONObject edge = edges.getJSONObject(j);
+                            JSONObject node = edge == null ? null : edge.getJSONObject("node");
+                            if (node == null) {
+                                continue;
+                            }
+                            Solution solution = new Solution();
+                            solution.setTitle(node.getString("title"));
+                            solution.setSlug(node.getString("slug"));
+                            solution.setSummary(node.getString("summary"));
 
-                        StringBuilder tagsSb = new StringBuilder();
-                        JSONArray tags = node.getJSONArray("tags");
-                        for (int k = 0; k < tags.size(); k++) {
-                            tagsSb.append("[").append(tags.getJSONObject(k).getString("name")).append("] ");
+                            StringBuilder tagsSb = new StringBuilder();
+                            JSONArray tags = node.getJSONArray("tags");
+                            if (tags != null) {
+                                for (int k = 0; k < tags.size(); k++) {
+                                    tagsSb.append("[").append(tags.getJSONObject(k).getString("name")).append("] ");
+                                }
+                            }
+                            solution.setTags(tagsSb.toString());
+                            solutions.add(solution);
                         }
-                        solution.setTags(tagsSb.toString());
-                        solutions.add(solution);
                     }
                 } else {
                     MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
