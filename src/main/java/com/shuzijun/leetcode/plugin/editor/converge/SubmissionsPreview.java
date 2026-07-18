@@ -27,7 +27,6 @@ import com.shuzijun.leetcode.plugin.model.Question;
 import com.shuzijun.leetcode.plugin.model.Submission;
 import com.shuzijun.leetcode.plugin.utils.FileEditorProviderReflection;
 import com.shuzijun.leetcode.plugin.window.dialog.SubmissionsPanel;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -145,7 +144,7 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
                     mySplitter.setFirstComponent(new JBLabel("No question"));
                 } else {
                     submissionList = fetchedSubmissionList;
-                    if (CollectionUtils.isNotEmpty(submissionList)) {
+                    if (submissionList != null && !submissionList.isEmpty()) {
                         table = new JBTable(new SubmissionsPanel.TableModel(submissionList));
                         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
                         table.getTableHeader().setReorderingAllowed(false);
@@ -307,7 +306,7 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
             String id = ((ConvergePreview.TabSelectFileEditorState) state).getChildrenState();
             if (!isLoad) {
                 initComponent(id);
-            } else if (CollectionUtils.isNotEmpty(submissionList)) {
+            } else if (submissionList != null && !submissionList.isEmpty()) {
                 for (int i = 0; i < submissionList.size(); i++) {
                     if (submissionList.get(i).getId().equals(id)) {
                         openSelectedQuestion(submissionList, i);

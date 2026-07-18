@@ -21,7 +21,6 @@ import com.shuzijun.leetcode.plugin.manager.ArticleManager;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.*;
 import com.shuzijun.leetcode.plugin.utils.FileEditorProviderReflection;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -135,7 +134,7 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
                     adjustEditorsVisibility();
                 } else if (Constant.ARTICLE_LIVE_LIST.equals(question.getArticleLive())) {
                     solutionList = fetchedSolutionList;
-                    if (CollectionUtils.isEmpty(solutionList)) {
+                    if (solutionList == null || solutionList.isEmpty()) {
                         mySplitter.setFirstComponent(new JBLabel("no solution"));
                     } else {
                         table = new JBTable(new TableModel(solutionList));
@@ -306,7 +305,7 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
             String slug = ((ConvergePreview.TabSelectFileEditorState) state).getChildrenState();
             if (!isLoad) {
                 initComponent(slug);
-            } else if (CollectionUtils.isNotEmpty(solutionList)) {
+            } else if (solutionList != null && !solutionList.isEmpty()) {
                 for (int i = 0; i < solutionList.size(); i++) {
                     if (solutionList.get(i).getSlug().equals(slug)) {
                         openSelectedQuestion(solutionList, i);

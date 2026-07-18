@@ -3,11 +3,11 @@ package com.shuzijun.leetcode.plugin.model;
 import com.alibaba.fastjson.JSONObject;
 import com.intellij.openapi.util.io.FileUtilRt;
 import com.shuzijun.leetcode.plugin.utils.*;
-import org.apache.commons.collections.map.HashedMap;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -57,7 +57,7 @@ public class Graphql {
 
         private String operationName;
 
-        private Map variables = new HashedMap();
+        private Map variables = new HashMap();
 
         private String query;
 

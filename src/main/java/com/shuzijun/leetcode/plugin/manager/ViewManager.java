@@ -5,7 +5,6 @@ import com.intellij.openapi.project.Project;
 import com.shuzijun.leetcode.plugin.model.*;
 import com.shuzijun.leetcode.plugin.utils.MessageUtils;
 import com.shuzijun.leetcode.plugin.utils.PropertiesUtils;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
@@ -55,7 +54,7 @@ public class ViewManager {
 
     public static void loadAllServiceData(NavigatorAction navigatorAction, Project project, String selectTitleSlug, boolean reset) {
         List<QuestionView> questionViews = QuestionManager.getQuestionAllService(project, reset);
-        if (CollectionUtils.isEmpty(questionViews)) {
+        if (questionViews == null || questionViews.isEmpty()) {
             MessageUtils.getInstance(project).showErrorMsg("error", PropertiesUtils.getInfo("response.question"));
             return;
         }
@@ -79,7 +78,7 @@ public class ViewManager {
                 conformSet.retainAll(tag.getQuestions());
             }
         }
-        if (CollectionUtils.isNotEmpty(filters.getTags())) {
+        if (filters.getTags() != null && !filters.getTags().isEmpty()) {
             List<Tag> tagList = navigatorAction.getFind().getFilter(Constant.FIND_TYPE_TAGS);
             Set<String> tagQuestions = new HashSet<>();
             Set<String> tagSlugs = filters.getTags().stream().collect(Collectors.toSet());

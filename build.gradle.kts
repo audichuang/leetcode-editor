@@ -42,6 +42,9 @@ dependencies {
     api("com.vladsch.flexmark:flexmark:0.62.2")
     api("com.vladsch.flexmark:flexmark-ext-attributes:0.62.2")
     api("io.github.biezhi:TinyPinyin:2.0.3.RELEASE")
+    // Apache HttpClient/HttpMime — IntelliJ 2026.x 已從 platform core 移除，登入(HttpLogin multipart)與
+    // cookie(CookieUtils BasicClientCookie) 用到；自帶進 plugin，不賭 platform 是否提供（headless 測不到登入路徑）
+    api("org.apache.httpcomponents:httpmime:4.5.14")
     // api(fileTree(mapOf("dir" to "src/main/resources/lib", "include" to listOf("*.jar"))))
 
     testImplementation(libs.junit)
