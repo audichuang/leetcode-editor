@@ -35,6 +35,11 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin --console=plain
 
+      - name: Verify plugin compatibility
+        # 抓「用了平台 class 卻沒宣告 module/plugin 依賴」這類編譯與單元測試都抓不到、
+        # 只有真實 IDE 啟動才會爆的問題（如 JCEF 在 2026.x 拆成 bundled plugin 導致的啟動崩潰）
+        run: ./gradlew verifyPlugin --console=plain
+
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
