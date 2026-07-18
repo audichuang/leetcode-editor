@@ -12,7 +12,6 @@ import com.shuzijun.leetcode.plugin.model.Find;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.model.Tag;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import icons.LeetCodeEditorIcons;
 import org.jetbrains.annotations.NotNull;
 
@@ -32,10 +31,13 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public void update(AnActionEvent e) {
-        if (e == null || e.getProject() == null) {
+        // BGT-safe: read NavigatorAction off the event's (async, EDT-snapshotted)
+        // DataContext instead of WindowFactory.getDataContext(), which walks
+        // ToolWindowManager/ContentManager/Swing directly and asserts EDT.
+        if (e == null) {
             return;
         }
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(e.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = e.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return;
         }
@@ -59,10 +61,12 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
     public AnAction[] getChildren(AnActionEvent anActionEvent) {
         // ponytail: platform may still probe groups via the legacy getChildren(null) path
         // (pre-update-session code); degrade to no children instead of NPE-ing.
-        if (anActionEvent == null || anActionEvent.getProject() == null) {
+        // Same BGT-safety note as update() above: read via the event's DataContext,
+        // never via WindowFactory.getDataContext().
+        if (anActionEvent == null) {
             return AnAction.EMPTY_ARRAY;
         }
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return AnAction.EMPTY_ARRAY;
         }
@@ -115,14 +119,19 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        // BGT routes updates through the modern async ActionUpdater, which always
-        // supplies a real AnActionEvent. EDT groups are still reachable through a
-        // legacy synchronous path that probes children via getChildren(null) —
-        // that path is what IntelliJ 2026.x started rejecting (issue #766).
-        // #756's crash (navigatorAction.updateUI() re-entering the toolbar update
-        // from a background thread) was fixed by removing that call, not by EDT
-        // itself, so BGT is safe again now that update()/getChildren() only read
-        // state (see FavoriteActionGroup, which already uses BGT with this pattern).
+        // BGT is required to restore #766 search (IntelliJ 2026.x rejects the legacy
+        // synchronous getChildren(null) probe that EDT-declared groups are reachable
+        // through). It is safe here only because update()/getChildren() no longer touch
+        // ToolWindowManager/ContentManager/Swing directly (that was the bug in the prior
+        // attempt): they read NavigatorAction via AnActionEvent#getData(), which the
+        // platform's PreCachedDataContext resolves by walking the Swing ancestor chain
+        // and calling every DataProvider.getData() ONCE on EDT before the async update
+        // session ever reaches BGT (see PreCachedDataContext's constructor-time
+        // assertEventDispatchThread() + MySink.uiDataSnapshot(DataProvider), which calls
+        // provider.getData(key) for every registered DataKey up front). NavigatorTabsPanel
+        // is a plain DataProvider (via SimpleToolWindowPanel), so its getData() runs on
+        // EDT during that snapshot, and update()/getChildren() on BGT only ever read the
+        // already-resolved value — never Swing/ToolWindow state directly.
         return ActionUpdateThread.BGT;
     }
 }

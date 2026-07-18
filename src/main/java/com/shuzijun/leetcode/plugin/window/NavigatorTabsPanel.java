@@ -49,7 +49,10 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
     private JBTabsImpl tabs;
 
-    private int toggleIndex = 0;
+    // volatile: written on EDT (toggle()/constructor), read on BGT via getData()
+    // (FindActionGroup/FavoriteActionGroup now run ActionUpdateThread.BGT), so a
+    // plain int risks a stale read across threads.
+    private volatile int toggleIndex = 0;
 
     private volatile Map<String, User> userCache = new ConcurrentHashMap<>();
 
