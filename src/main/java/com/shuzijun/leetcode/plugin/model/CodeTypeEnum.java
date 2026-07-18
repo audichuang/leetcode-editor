@@ -1,5 +1,7 @@
 package com.shuzijun.leetcode.plugin.model;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -76,6 +78,9 @@ public enum CodeTypeEnum {
     }
 
     public static CodeTypeEnum getCodeTypeEnumByLangSlug(String langSlug) {
+        if (StringUtils.isBlank(langSlug)) {
+            return null;
+        }
         return LANGSLUGMAP.get(langSlug.toUpperCase());
     }
 

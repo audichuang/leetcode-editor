@@ -87,6 +87,10 @@ public class SubmissionManager {
                 if (jsonObject == null) {
                     return file;
                 }
+                if (codeTypeEnum == null) {
+                    MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("submission.lang"));
+                    return file;
+                }
 
                 StringBuffer sb = new StringBuffer();
 
