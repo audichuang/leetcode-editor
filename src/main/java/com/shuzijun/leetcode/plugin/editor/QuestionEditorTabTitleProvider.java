@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
 
-    // cache miss 時背景抓題進行中的 file path，防同一檔重複觸發抓取；抓取完成（成功或失敗）就移除
+    // cache miss 時背景抓題進行中的 project+file path，防同一 project 內同一檔重複觸發抓取；抓取完成（成功或失敗）就移除
     private static final Set<String> refreshing = ConcurrentHashMap.newKeySet();
 
     @Override
@@ -56,8 +56,10 @@ public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
 
     // cache miss 時背景抓一次題目填快取，成功後請平台重新問一次標題；同一檔已有抓取在跑就不重複觸發
     private void scheduleRefresh(Project project, VirtualFile file, String titleSlug) {
-        String path = file.getPath();
-        if (!refreshing.add(path)) {
+        // key 帶 project 身分：多 project 冷啟同時開同一實體檔時，各 project 都要自己抓一次並刷新自己的 presentation
+        // （QuestionManager 快取是全域的，第二次抓會命中快取，成本近零）
+        String key = project.getLocationHash() + ":" + file.getPath();
+        if (!refreshing.add(key)) {
             return;
         }
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -73,7 +75,7 @@ public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
                     FileEditorManagerEx.getInstanceEx(project).updateFilePresentation(file);
                 });
             } finally {
-                refreshing.remove(path);
+                refreshing.remove(key);
             }
         });
     }

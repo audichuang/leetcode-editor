@@ -13,7 +13,6 @@ import com.shuzijun.leetcode.plugin.model.Question;
 import com.shuzijun.leetcode.plugin.model.QuestionView;
 import com.shuzijun.leetcode.plugin.model.Tag;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -25,11 +24,20 @@ public class FavoriteActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public AnAction[] getChildren(AnActionEvent anActionEvent) {
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
-        if (navigatorAction == null){
-            return new AnAction[0];
+        // BGT-safe: read via the event's (async, EDT-snapshotted) DataContext instead of
+        // WindowFactory.getDataContext(), which walks ToolWindowManager/ContentManager/Swing
+        // directly and asserts EDT. Same fix as FindActionGroup. The selected row's
+        // QuestionView additionally requires a JTable read (getSelectedRowData()), which must
+        // not happen on BGT either — NavigatorTabsPanel#getData() resolves it on EDT during
+        // the platform's snapshot; see LEETCODE_PROJECTS_SELECTED_QUESTION.
+        if (anActionEvent == null) {
+            return AnAction.EMPTY_ARRAY;
         }
-        QuestionView questionView = (QuestionView) navigatorAction.getSelectedRowData();
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        if (navigatorAction == null) {
+            return AnAction.EMPTY_ARRAY;
+        }
+        QuestionView questionView = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION);
         String questionId = null;
         String titleSlug = null;
         if (questionView != null) {

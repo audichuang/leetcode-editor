@@ -14,6 +14,7 @@ import com.shuzijun.leetcode.plugin.listener.LoginNotifier;
 import com.shuzijun.leetcode.plugin.listener.QuestionStatusNotifier;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.Config;
+import com.shuzijun.leetcode.plugin.model.QuestionView;
 import com.shuzijun.leetcode.plugin.model.User;
 import com.shuzijun.leetcode.plugin.setting.PersistentConfig;
 import com.shuzijun.leetcode.plugin.setting.StatisticsData;
@@ -203,6 +204,15 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
             SimpleToolWindowPanel panel = navigatorPanels[toggleIndex];
             if (panel instanceof NavigatorPanelAction) {
                 return ((NavigatorPanelAction) panel).getNavigatorAction();
+            }
+        }
+        if (DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION.is(dataId)) {
+            // Swing JTable read (getSelectedRowData()) must happen here, on EDT during the
+            // platform's DataContext snapshot — never inside a BGT action/group's getChildren().
+            SimpleToolWindowPanel panel = navigatorPanels[toggleIndex];
+            if (panel instanceof NavigatorPanelAction) {
+                Object rowData = ((NavigatorPanelAction) panel).getNavigatorAction().getSelectedRowData();
+                return rowData instanceof QuestionView ? rowData : null;
             }
         }
 
