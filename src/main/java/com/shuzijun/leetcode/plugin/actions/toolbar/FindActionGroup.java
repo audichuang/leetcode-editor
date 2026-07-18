@@ -32,7 +32,13 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public void update(AnActionEvent e) {
+        if (e == null || e.getProject() == null) {
+            return;
+        }
         NavigatorAction navigatorAction = WindowFactory.getDataContext(e.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        if (navigatorAction == null) {
+            return;
+        }
 
         String id = e.getActionManager().getId(this);
         List<Tag> tags = getTags(id, navigatorAction.getFind());
@@ -51,9 +57,18 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public AnAction[] getChildren(AnActionEvent anActionEvent) {
+        // ponytail: platform may still probe groups via the legacy getChildren(null) path
+        // (pre-update-session code); degrade to no children instead of NPE-ing.
+        if (anActionEvent == null || anActionEvent.getProject() == null) {
+            return AnAction.EMPTY_ARRAY;
+        }
+        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        if (navigatorAction == null) {
+            return AnAction.EMPTY_ARRAY;
+        }
+
         List<AnAction> anActionList = Lists.newArrayList();
         String id = anActionEvent.getActionManager().getId(this);
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         List<Tag> tags = getTags(id, navigatorAction.getFind());
 
         if (tags != null && !tags.isEmpty()) {
@@ -100,6 +115,14 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
 
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        return  ActionUpdateThread.EDT;
+        // BGT routes updates through the modern async ActionUpdater, which always
+        // supplies a real AnActionEvent. EDT groups are still reachable through a
+        // legacy synchronous path that probes children via getChildren(null) —
+        // that path is what IntelliJ 2026.x started rejecting (issue #766).
+        // #756's crash (navigatorAction.updateUI() re-entering the toolbar update
+        // from a background thread) was fixed by removing that call, not by EDT
+        // itself, so BGT is safe again now that update()/getChildren() only read
+        // state (see FavoriteActionGroup, which already uses BGT with this pattern).
+        return ActionUpdateThread.BGT;
     }
 }
