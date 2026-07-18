@@ -22,8 +22,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 
-import java.net.CookieHandler;
-import java.net.CookieManager;
 import java.net.HttpCookie;
 import java.net.PasswordAuthentication;
 import java.nio.charset.StandardCharsets;
@@ -49,16 +47,6 @@ public class HttpRequestUtils {
     private static MyExecutorHttp executorHttp = new MyExecutorHttp();
     private static LcClient enLcClient = LcClient.builder(HttpClient.SiteEnum.EN).executorHttp(executorHttp).build();
     private static LcClient cnLcClient = LcClient.builder(HttpClient.SiteEnum.CN).executorHttp(executorHttp).build();
-    private static final CookieManager cookieManager = new CookieManager(null, (uri, cookie) -> {
-        if (uri == null || cookie == null || uri.getHost().equals("hm.baidu.com")) {
-            return false;
-        }
-        return HttpCookie.domainMatches(cookie.getDomain(), uri.getHost());
-    });
-
-    static {
-        CookieHandler.setDefault(cookieManager);
-    }
 
     private static HttpResponse buildResp(com.shuzijun.lc.http.HttpResponse response, HttpResponse httpResponse) {
         httpResponse.setUrl(response.getHttpRequest().getUrl());

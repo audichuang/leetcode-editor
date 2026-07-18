@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author shuzijun
@@ -53,6 +54,8 @@ public class Graphql {
 
         private static final String CNSUFFIX = "_cn.graphql";
 
+        private static final Map<String, String> QUERY_CACHE = new ConcurrentHashMap<>();
+
         private String url = URLUtils.getLeetcodeGraphql();
 
         private String operationName;
@@ -96,14 +99,22 @@ public class Graphql {
         }
 
         private GraphqlBuilder query(String operationName) {
-            try (InputStream inputStream = GraphqlBuilder.class.getResourceAsStream(PATH + operationName + suffix)) {
+            String key = PATH + operationName + suffix;
+            String cached = QUERY_CACHE.get(key);
+            if (cached != null) {
+                this.query = cached;
+                return this;
+            }
+            try (InputStream inputStream = GraphqlBuilder.class.getResourceAsStream(key)) {
                 if (inputStream == null) {
-                    LogUtils.LOG.error(PATH + operationName + suffix + " Path is empty");
+                    LogUtils.LOG.error(key + " Path is empty");
                 } else {
-                    this.query = new String(FileUtilRt.loadBytes(inputStream));
+                    String loaded = new String(FileUtilRt.loadBytes(inputStream));
+                    QUERY_CACHE.put(key, loaded);
+                    this.query = loaded;
                 }
             } catch (IOException e) {
-                LogUtils.LOG.error(PATH + operationName + suffix + " Loading exception", e);
+                LogUtils.LOG.error(key + " Loading exception", e);
             }
             return this;
         }

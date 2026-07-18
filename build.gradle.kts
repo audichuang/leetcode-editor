@@ -37,7 +37,6 @@ dependencies {
     api("io.sentry:sentry:1.7.9") {
         exclude(module = "slf4j-api")
     }
-    api("org.scilab.forge:jlatexmath:1.0.7")
     api("org.apache.commons:commons-lang3:3.9")
     api("com.vladsch.flexmark:flexmark:0.62.2")
     api("com.vladsch.flexmark:flexmark-ext-attributes:0.62.2")

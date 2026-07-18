@@ -101,6 +101,10 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
 
     private void buildComponent(NotePreview notePreview, File file, JBLabel loadingLabel) {
         try {
+            if (fileEditor != null) {
+                Disposer.dispose(fileEditor);
+                fileEditor = null;
+            }
             if (file == null || !file.exists()) {
                 myComponent.addToCenter(new JBLabel("No note"));
             } else {

@@ -90,7 +90,8 @@ public class ArticleManager {
             futures.add(ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 List<Solution> solutions = new ArrayList<>();
                 HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("questionSolutionArticles").
-                        variables("questionSlug", titleSlug).variables("first", 30).variables("skip", skip).variables("orderBy", "DEFAULT").request();
+                        variables("questionSlug", titleSlug).variables("first", 30).variables("skip", skip).variables("orderBy", "DEFAULT")
+                        .cacheParam(titleSlug).request();
                 if (response.getStatusCode() == 200) {
                     JSONArray edges = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("questionSolutionArticles").getJSONArray("edges");
                     for (int j = 0; j < edges.size(); j++) {

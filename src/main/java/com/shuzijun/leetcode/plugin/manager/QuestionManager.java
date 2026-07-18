@@ -51,11 +51,12 @@ public class QuestionManager {
         if (user != null) {
             isPremium = user.isPremium();
         }
+        String username = (user == null) ? null : user.getUsername();
 
         HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("problemsetQuestionList")
                 .variables("categorySlug", pageInfo.getCategorySlug()).variables("skip", pageInfo.getSkip())
                 .variables("limit", pageInfo.getPageSize()).variables("filters", pageInfo.getFilters())
-                .cacheParam(WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser().getUsername()).request();
+                .cacheParam(username).request();
         if (response.getStatusCode() == 200) {
             List<QuestionView> questionList = parseQuestion(response.getBody(), isPremium);
 
@@ -86,6 +87,7 @@ public class QuestionManager {
         if (user != null) {
             isPremium = user.isPremium();
         }
+        String username = (user == null) ? null : user.getUsername();
         // 快照世代；寫回前若世代已變（帳號切換觸發了 invalidateAll），放棄寫回避免覆蓋新帳號的快取
         int gen = generation;
         if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null || reset) {
@@ -95,7 +97,7 @@ public class QuestionManager {
             try {
                 if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null || reset) {
                     HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("allQuestions")
-                            .cacheParam(WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser().getUsername()).request();
+                            .cacheParam(username).request();
                     if (response.getStatusCode() == 200) {
                         List<QuestionView> questionViews = new ArrayList<>();
 

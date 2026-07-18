@@ -8,14 +8,8 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbAware;
 import com.shuzijun.leetcode.plugin.manager.FavoriteManager;
-import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
-import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
-import com.shuzijun.leetcode.plugin.model.Question;
-import com.shuzijun.leetcode.plugin.model.QuestionView;
 import com.shuzijun.leetcode.plugin.model.Tag;
-import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,31 +20,25 @@ public class FavoriteAction extends ToggleAction implements DumbAware {
 
     private Tag tag;
 
-    public FavoriteAction(@Nullable String text, Tag tag) {
+    private String questionId;
+
+    private String titleSlug;
+
+    public FavoriteAction(@Nullable String text, Tag tag, String questionId, String titleSlug) {
         super(text);
         this.tag = tag;
+        this.questionId = questionId;
+        this.titleSlug = titleSlug;
     }
 
     @Override
     public boolean isSelected(AnActionEvent anActionEvent) {
-
-        NavigatorAction<QuestionView> navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
-        final QuestionView questionView = navigatorAction.getSelectedRowData();
-        if (questionView == null) {
-            return false;
-        }
-        Question cacheQuestion = QuestionManager.getQuestionByTitleSlug(questionView.getTitleSlug(), anActionEvent.getProject(),true);
-        if (cacheQuestion == null) {
-            return false;
-        }
-        return tag.getQuestions().contains(cacheQuestion.getQuestionId());
+        return questionId != null && tag.getQuestions().contains(questionId);
     }
 
     @Override
     public void setSelected(AnActionEvent anActionEvent, boolean b) {
-        NavigatorAction<QuestionView> navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
-        QuestionView questionView = navigatorAction.getSelectedRowData();
-        if (questionView == null) {
+        if (titleSlug == null) {
             return;
         }
 
@@ -58,9 +46,9 @@ public class FavoriteAction extends ToggleAction implements DumbAware {
             @Override
             public void run(@NotNull ProgressIndicator progressIndicator) {
                 if (b) {
-                    FavoriteManager.addQuestionToFavorite(tag, questionView.getTitleSlug(), anActionEvent.getProject());
+                    FavoriteManager.addQuestionToFavorite(tag, titleSlug, anActionEvent.getProject());
                 } else {
-                    FavoriteManager.removeQuestionFromFavorite(tag, questionView.getTitleSlug(), anActionEvent.getProject());
+                    FavoriteManager.removeQuestionFromFavorite(tag, titleSlug, anActionEvent.getProject());
                 }
             }
         });

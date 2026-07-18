@@ -1,6 +1,7 @@
 package com.shuzijun.leetcode.plugin.timer;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.StatusBar;
 import com.intellij.openapi.wm.StatusBarWidget;
 import com.intellij.openapi.wm.StatusBarWidgetFactory;
@@ -38,6 +39,7 @@ public class TimerStatusBarWidgetProvider implements StatusBarWidgetFactory {
 
     @Override
     public void disposeWidget(@NotNull StatusBarWidget widget) {
+        Disposer.dispose(widget);
     }
 
     @Override

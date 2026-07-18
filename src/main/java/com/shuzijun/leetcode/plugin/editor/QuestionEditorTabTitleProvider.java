@@ -1,5 +1,7 @@
 package com.shuzijun.leetcode.plugin.editor;
 
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx;
 import com.intellij.openapi.fileEditor.impl.EditorTabTitleProvider;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.NlsContexts;
@@ -15,10 +17,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * @author shuzijun
  */
 public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
+
+    // cache miss 時背景抓題進行中的 file path，防同一檔重複觸發抓取；抓取完成（成功或失敗）就移除
+    private static final Set<String> refreshing = ConcurrentHashMap.newKeySet();
+
     @Override
     public @NlsContexts.TabTitle @Nullable String getEditorTabTitle(@NotNull Project project, @NotNull VirtualFile file) {
         try {
@@ -30,8 +39,10 @@ public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
             if (leetcodeEditor == null || StringUtils.isBlank(leetcodeEditor.getContentPath())) {
                 return null;
             } else {
-                Question question = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project);
+                // cache-only：避免在 EDT 同步發網路請求卡住 UI
+                Question question = QuestionManager.getQuestionByTitleSlug(leetcodeEditor.getTitleSlug(), project, true);
                 if (question == null) {
+                    scheduleRefresh(project, file, leetcodeEditor.getTitleSlug());
                     return null;
                 } else {
                     return question.getFormTitle();
@@ -41,5 +52,29 @@ public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
             LogUtils.LOG.error("QuestionEditorIconProvider -> patchIcon", e);
             return null;
         }
+    }
+
+    // cache miss 時背景抓一次題目填快取，成功後請平台重新問一次標題；同一檔已有抓取在跑就不重複觸發
+    private void scheduleRefresh(Project project, VirtualFile file, String titleSlug) {
+        String path = file.getPath();
+        if (!refreshing.add(path)) {
+            return;
+        }
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            try {
+                Question question = QuestionManager.getQuestionByTitleSlug(titleSlug, project);
+                if (question == null) {
+                    return;
+                }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (project.isDisposed() || !file.isValid()) {
+                        return;
+                    }
+                    FileEditorManagerEx.getInstanceEx(project).updateFilePresentation(file);
+                });
+            } finally {
+                refreshing.remove(path);
+            }
+        });
     }
 }
