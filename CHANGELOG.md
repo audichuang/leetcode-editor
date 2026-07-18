@@ -7,6 +7,20 @@
 [![捐赠][badge:donate-zh]][shuzijun-donate]
 [![内推][badge:referrals]][shuzijun-referrals]
 
+## 8.17.0
+
+### Changed
+- Performance: fix memory leaks (timer status-bar widget, note preview editor, JVM-global cookie store), cache GraphQL query resources, join solution-list pages to the HTTP cache, stop blocking the EDT for editor tab titles, drop unused jlatexmath dependency
+
+### Fixed
+- fix [#733](https://github.com/shuzijun/leetcode-editor/issues/733) [#738](https://github.com/shuzijun/leetcode-editor/issues/738) NPE on Run/Submit when question langSlug is missing
+- fix [#708](https://github.com/shuzijun/leetcode-editor/issues/708) NPE when proxy authentication is enabled without credentials
+- fix [#706](https://github.com/shuzijun/leetcode-editor/issues/706) error reporter ClassCastException on newer platforms
+- fix [#760](https://github.com/shuzijun/leetcode-editor/issues/760) solution list degrades gracefully on malformed API responses
+- fix [#754](https://github.com/shuzijun/leetcode-editor/issues/754) login window crash when closed before JCEF finishes initializing
+- fix [#766](https://github.com/shuzijun/leetcode-editor/issues/766) search returns no results on IntelliJ 2026.x
+
+
 ## 8.16.0
 
 ### Added
