@@ -207,6 +207,9 @@ public class HttpRequestUtils {
                 proxyAuthenticator = (route, response) -> {
                     ideaWideAuthenticator.SetResponse(response);
                     final PasswordAuthentication authentication = ideaWideAuthenticator.getPasswordAuthentication();
+                    if (authentication == null) {
+                        return null;
+                    }
                     final String credential = Credentials.basic(authentication.getUserName(), new String(authentication.getPassword()));
 
                     for (Challenge challenge : response.challenges()) {
