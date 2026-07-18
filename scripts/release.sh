@@ -42,7 +42,8 @@ echo "==> built: $ZIP  (v$VERSION)"
 # 3. 驗證 zip 內 plugin.xml —— 正確地進 lib/*.jar 內查（plugin.xml 不在 zip 根 META-INF）
 TMP=$(mktemp -d)
 unzip -oq "$ZIP" -d "$TMP"
-MAINJAR=$(find "$TMP" -name "leetcode-editor*.jar" -path "*/lib/*" | head -1)
+# 排除 searchableOptions 側車 jar（它沒有 plugin.xml，find 順序不定時會被 head -1 抓到）
+MAINJAR=$(find "$TMP" -name "leetcode-editor*.jar" ! -name "*searchableOptions*" -path "*/lib/*" | head -1)
 [ -n "$MAINJAR" ] || { echo "❌ zip 內找不到 main jar"; rm -rf "$TMP"; exit 1; }
 PLUGINXML=$(unzip -p "$MAINJAR" META-INF/plugin.xml)
 rm -rf "$TMP"
