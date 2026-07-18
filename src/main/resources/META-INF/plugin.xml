@@ -16,6 +16,9 @@
          on how to target different products -->
     <!-- uncomment to enable plugin in all products -->
     <depends>com.intellij.modules.lang</depends>
+    <!-- JCEF 在 2026.x 從 platform core 拆成獨立 bundled plugin；用 JBCefApp/JCEFHtmlPanel 必須宣告此依賴，
+         否則新版 IDE 的 module 隔離會讓 classloader 找不到 com.intellij.ui.jcef.* → 啟動崩潰 -->
+    <depends>com.intellij.modules.jcef</depends>
 
     <application-components>
 

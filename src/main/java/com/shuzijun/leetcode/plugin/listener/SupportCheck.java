@@ -23,7 +23,13 @@ public class SupportCheck implements StartupActivity, DumbAware {
         if (ApplicationManager.getApplication().isUnitTestMode() ||  !isFirstProject ) {
             return;
         }
-        if(!JBCefApp.isSupported()){
+        // 用 Throwable 兜底：JCEF 若因平台 module 缺失/停用而無法載入（NoClassDefFoundError 屬 Error），
+        // 也絕不能讓 startup activity 把整個 IDE 啟動流程帶垮，只提示使用者即可。
+        try {
+            if (!JBCefApp.isSupported()) {
+                Notifications.Bus.notify(new Notification(PluginConstant.NOTIFICATION_GROUP, "Not Support JCEF", "Your environment does not support JCEF, cannot use LeetCode Editor.Check the Registry 'ide.browser.jcef.enabled'.", NotificationType.ERROR));
+            }
+        } catch (Throwable t) {
             Notifications.Bus.notify(new Notification(PluginConstant.NOTIFICATION_GROUP, "Not Support JCEF", "Your environment does not support JCEF, cannot use LeetCode Editor.Check the Registry 'ide.browser.jcef.enabled'.", NotificationType.ERROR));
         }
     }

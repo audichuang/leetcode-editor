@@ -98,8 +98,18 @@ intellijPlatform {
     }
 
     pluginVerification {
+        // 只擋會導致「裝不上／啟動崩潰」的相容性、缺依賴、結構問題（這次的 JCEF 缺依賴正屬此類，會被擋）。
+        // internal/override-only API 使用是這個 2 年老 plugin 的既有規範債、不影響相容，降為警告不擋發布。
+        failureLevel = listOf(
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
+        )
         ides {
             recommended()
+            // 明確驗證使用者實際使用的 2026.2：抓「用了平台 class 卻沒宣告 module/plugin 依賴」這類
+            // 編譯與單元測試都抓不到、只有真實 IDE 啟動才會爆的相容性問題（如 JCEF 拆成 bundled plugin）
+            create("IU", "2026.2")
         }
     }
 }
