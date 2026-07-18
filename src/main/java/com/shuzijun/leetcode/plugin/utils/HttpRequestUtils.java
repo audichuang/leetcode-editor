@@ -1,5 +1,6 @@
 package com.shuzijun.leetcode.plugin.utils;
 
+import com.google.common.base.Utf8;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.intellij.openapi.application.Application;
@@ -24,7 +25,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.net.HttpCookie;
 import java.net.PasswordAuthentication;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,10 +38,11 @@ public class HttpRequestUtils {
 
     // ponytail: 上限單位從「筆數」改成「位元組」，避免少數大 body（如 allQuestions ~2MB）把 200 個 slot 撐成數百MB；
     // weigher 用 UTF-8 位元組數（而非 String.length() 的 UTF-16 字元數），CJK body 才不會被低估近半；
+    // 用 Utf8.encodedLength 算位元組數而不 getBytes()，避免每次 cache put 都多配一份等同 body 大小的 byte[] 副本；
     // 其餘 LRU/TTL/per-key 載入鎖語意不變，只是淘汰依據換了計量單位
     private static final Cache<HttpRequest, HttpResponse> httpResponseCache = CacheBuilder.newBuilder()
             .maximumWeight(32L * 1024 * 1024)
-            .weigher((HttpRequest k, HttpResponse v) -> v.getBody() == null ? 0 : v.getBody().getBytes(StandardCharsets.UTF_8).length)
+            .weigher((HttpRequest k, HttpResponse v) -> v.getBody() == null ? 0 : Utf8.encodedLength(v.getBody()))
             .expireAfterWrite(30, TimeUnit.SECONDS).build();
 
     private static MyExecutorHttp executorHttp = new MyExecutorHttp();

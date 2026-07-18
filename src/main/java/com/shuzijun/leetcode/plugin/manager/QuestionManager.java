@@ -58,14 +58,16 @@ public class QuestionManager {
                 .variables("limit", pageInfo.getPageSize()).variables("filters", pageInfo.getFilters())
                 .cacheParam(username).request();
         if (response.getStatusCode() == 200) {
-            List<QuestionView> questionList = parseQuestion(response.getBody(), isPremium);
+            // ponytail: 根節點只 parse 一次並重用，原本 parseQuestion 內部 parse 一次、這裡為讀 total 又 parse 一次同一份 body
+            JSONObject problemsetQuestionList = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("problemsetQuestionList");
+            List<QuestionView> questionList = parseQuestion(problemsetQuestionList, isPremium);
 
             QuestionView dayQuestion = questionOfToday();
             if (dayQuestion != null) {
                 questionList.add(0, dayQuestion);
             }
 
-            Integer total = JSONObject.parseObject(response.getBody()).getJSONObject("data").getJSONObject("problemsetQuestionList").getInteger("total");
+            Integer total = problemsetQuestionList.getInteger("total");
             pageInfo.setRowTotal(total);
             pageInfo.setRows(questionList);
         } else {
@@ -157,13 +159,12 @@ public class QuestionManager {
         return questionIndex;
     }
 
-    private static List<QuestionView> parseQuestion(String str, Boolean isPremium) {
+    private static List<QuestionView> parseQuestion(JSONObject problemsetQuestionList, Boolean isPremium) {
 
         List<QuestionView> questionList = new ArrayList<>();
 
-        if (StringUtils.isNotBlank(str)) {
-            JSONObject jsonObject = JSONObject.parseObject(str).getJSONObject("data").getJSONObject("problemsetQuestionList");
-            JSONArray jsonArray = jsonObject.getJSONArray("questions");
+        if (problemsetQuestionList != null) {
+            JSONArray jsonArray = problemsetQuestionList.getJSONArray("questions");
             for (int i = 0; i < jsonArray.size(); i++) {
                 JSONObject object = jsonArray.getJSONObject(i);
                 QuestionView question = parseQuestionView(object, isPremium);
