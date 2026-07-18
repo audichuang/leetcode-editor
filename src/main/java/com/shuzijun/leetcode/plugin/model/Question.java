@@ -94,6 +94,9 @@ public class Question extends QuestionView {
             return "Subscribe to unlock.";
         }
         CodeTypeEnum codeType = CodeTypeEnum.getCodeTypeEnumByLangSlug(langSlug);
+        if (codeType == null) {
+            return "Unable to recognize the code type for this question, please reopen the question.";
+        }
         for (CodeSnippet codeSnippet : codeSnippets) {
             if (codeType.getLangSlug().equals(codeSnippet.getLangSlug())) {
                 StringBuffer sb = new StringBuffer();
