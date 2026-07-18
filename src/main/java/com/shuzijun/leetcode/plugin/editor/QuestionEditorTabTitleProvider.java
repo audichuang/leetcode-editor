@@ -58,7 +58,8 @@ public class QuestionEditorTabTitleProvider implements EditorTabTitleProvider {
     private void scheduleRefresh(Project project, VirtualFile file, String titleSlug) {
         // key 帶 project 身分：多 project 冷啟同時開同一實體檔時，各 project 都要自己抓一次並刷新自己的 presentation
         // （QuestionManager 快取是全域的，第二次抓會命中快取，成本近零）
-        String key = project.getLocationHash() + ":" + file.getPath();
+        // 用 basePath 而非 getLocationHash()：後者是 32-bit hash，存在真實碰撞（如 "/tmp/Aa" vs "/tmp/BB"）
+        String key = project.getBasePath() + ":" + file.getPath();
         if (!refreshing.add(key)) {
             return;
         }
