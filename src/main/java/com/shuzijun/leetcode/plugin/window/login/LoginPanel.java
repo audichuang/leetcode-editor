@@ -221,8 +221,14 @@ public class LoginPanel extends DialogWrapper {
         @Override
         public void dispose() {
             getJBCefClient().removeLoadHandler(cefLoadHandler, getCefBrowser());
-            getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, false);
-            getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, false);
+            try {
+                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, false);
+                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, false);
+            } catch (Exception e) {
+                // ponytail: cef_server may not be established yet when the dialog closes early (#754); clearing
+                // cookies is best-effort, next login overwrites them, so just log and continue disposing.
+                LogUtils.LOG.warn("failed to delete jcef cookies on dispose", e);
+            }
             super.dispose();
         }
     }
