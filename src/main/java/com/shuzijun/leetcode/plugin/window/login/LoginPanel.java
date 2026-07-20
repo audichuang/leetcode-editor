@@ -32,6 +32,7 @@ import java.awt.event.ActionEvent;
 import java.net.HttpCookie;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author shuzijun
@@ -170,18 +171,22 @@ public class LoginPanel extends DialogWrapper {
         private void init(){
             getJBCefClient().addLoadHandler(cefLoadHandler = new CefLoadHandlerAdapter() {
 
-                boolean successDispose = false;
+                // AtomicBoolean：JCEF 回呼可能在不同執行緒觸發（IO/UI/remote pool），plain boolean 無跨緒可見性保證
+                final AtomicBoolean successDispose = new AtomicBoolean(false);
 
                 @Override
                 public void onLoadError(CefBrowser browser, CefFrame frame, CefLoadHandler.ErrorCode errorCode, String errorText, String failedUrl) {
-                    if (!successDispose) {
+                    if (!successDispose.get()) {
                         MessageUtils.getInstance(project).showWarnMsg("", "The page failed to load, please check the network and open it again");
                     }
                 }
 
                 @Override
                 public void onLoadingStateChange(CefBrowser browser, boolean isLoading, boolean canGoBack, boolean canGoForward) {
-
+                    // 登入成功後不再重複掃 cookie / 打 isLogin：此回呼每次頁面載入狀態變化都會觸發，成功後掃描純屬浪費網路請求。
+                    if (successDispose.get()) {
+                        return;
+                    }
                     getJBCefCookieManager().getCefCookieManager().visitAllCookies(new CefCookieVisitor() {
 
                         private List<HttpCookie> cookieList = new ArrayList<>();

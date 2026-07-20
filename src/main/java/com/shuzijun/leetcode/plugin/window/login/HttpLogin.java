@@ -31,6 +31,9 @@ import java.util.List;
  * @author shuzijun
  */
 public class HttpLogin {
+    // 已知限制：CN 帳密登入路徑。成功後只 loadUser + notifier，未走 loginSuccess 持久化 cookie（不像 JCEF/貼cookie），
+    // 故此路徑登入者重開 IDE 無法被 restorePersistedCookies 自動恢復、仍需手動登入。
+    // 暫不補：CN 匿名被 Cloudflare 擋、主線用 .com JCEF；若日後復用此路徑，需讓成功分支也持久化目前 cookie-store 快照。
     public static boolean ajaxLogin(Config config, NavigatorAction navigatorAction, Project project) {
 
         if (!URLUtils.isCn()) {
@@ -133,6 +136,42 @@ public class HttpLogin {
                 examineEmail(project);
             }
         });
+    }
+
+    // 開面板時把磁碟持久化的 cookie 載回記憶體 client（lc-sdk client 是 static 記憶體物件，重開 IDE 就空）。
+    // 只做 hydration，不呼叫 isLogin、不發 LoginNotifier——真正的登入驗證交給呼叫端既有的 getUser()。
+    // synchronized + 先查 hasSessionCookie：序列化 restore 彼此、且已有 session 就短路。
+    // 注意：這把鎖「只」保證 restore 自身冪等，不涵蓋 LoginAction/LogoutAction 的 cookie 寫入；
+    // logout 已把清磁碟排在清記憶體之前來避開與 restore 的交錯（見 LogoutAction）。
+    public static synchronized void restorePersistedCookies() {
+        if (HttpRequestUtils.hasSessionCookie()) {
+            return;
+        }
+        Config config = PersistentConfig.getInstance().getInitConfig();
+        if (config == null || StringUtils.isBlank(config.getLoginName())) {
+            return;
+        }
+        String cookieJson = config.getCookie(config.getUrl() + config.getLoginName());
+        if (StringUtils.isBlank(cookieJson)) {
+            return;
+        }
+        try {
+            HttpRequestUtils.setCookieIfAbsent(CookieUtils.toHttpCookie(cookieJson));
+        } catch (Exception e) {
+            // 持久化 cookie 解析失敗（資料損壞等）：記 warning 但不中斷，避免每次開面板靜默失敗又查無原因。
+            LogUtils.LOG.warn("restorePersistedCookies failed to parse persisted cookie", e);
+        }
+    }
+
+    // logout 專用：與 restorePersistedCookies 共用 HttpLogin.class 鎖，讓「清磁碟 + 清記憶體」與 restore 的
+    // 「讀磁碟 + 寫記憶體」互斥。否則 restore 可能在 logout 清除後、用它稍早讀到的舊 cookieJson 把 cookie 寫回記憶體，
+    // 若遠端 logout 未生效更會復活仍有效的 session。
+    public static synchronized void clearCookiesOnLogout(Config config) {
+        if (config != null) {
+            config.addCookie(config.getUrl() + config.getLoginName(), null);
+            PersistentConfig.getInstance().setInitConfig(config);
+        }
+        HttpRequestUtils.resetHttpclient();
     }
 
     public static boolean isEnabledJcef() {

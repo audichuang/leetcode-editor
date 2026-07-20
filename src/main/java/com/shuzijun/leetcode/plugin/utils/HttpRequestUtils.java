@@ -138,13 +138,35 @@ public class HttpRequestUtils {
         return Boolean.FALSE;
     }
 
-    public static void setCookie(List<HttpCookie> cookieList) {
+    // 以下 cookie 記憶體操作均 synchronized(HttpRequestUtils.class)：讓 clearCookie+addCookie 這種複合寫入原子化，
+    // 消除 login(貼cookie/JCEF) 的 setCookie 與 restore/logout 並發時的 partial write／先清後寫競態。
+    // 鎖序：restore/logout 先持 HttpLogin.class 再進此處持 HttpRequestUtils.class；此處不回呼 HttpLogin，無反向鎖序、不會死結。
+    public static synchronized void setCookie(List<HttpCookie> cookieList) {
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
         enLcClient.getClient().cookieStore().addCookie(URLUtils.getLeetcodeHost(), cookieList);
     }
 
-    public static void resetHttpclient() {
+    // 僅在記憶體尚無 session cookie 時才載入（restore 專用）：「檢查 + 載入」在同一把 HttpRequestUtils.class 鎖內原子完成。
+    // 這保證並發的 login setCookie(新) 與 restore(舊) 不論先後，login 的新 cookie 都不會被 restore 舊值覆蓋：
+    // login 先 → restore 見 session 已在而跳過；restore 先 → login 無條件 setCookie 覆蓋。
+    public static synchronized void setCookieIfAbsent(List<HttpCookie> cookieList) {
+        if (enLcClient.getClient().cookieStore().getCookie(URLUtils.getLeetcodeHost(), "LEETCODE_SESSION") != null) {
+            return;
+        }
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
+        enLcClient.getClient().cookieStore().addCookie(URLUtils.getLeetcodeHost(), cookieList);
+    }
+
+    public static synchronized void resetHttpclient() {
+        enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
+    }
+
+    // 記憶體 client 是否已握有登入用的 session cookie（判斷 restore 是否需要跑）。
+    // 用 LEETCODE_SESSION 而非 csrftoken：後者匿名也拿得到，不代表已登入。
+    // 純記憶體查找，不 catch 泛型例外——否則會把 cookie-store 的程式錯誤偽裝成「沒 cookie」而誤觸重載。
+    public static synchronized boolean hasSessionCookie() {
+        return enLcClient.getClient().cookieStore()
+                .getCookie(URLUtils.getLeetcodeHost(), "LEETCODE_SESSION") != null;
     }
 
     public static void invalidateCache() {

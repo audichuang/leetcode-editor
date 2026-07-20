@@ -22,6 +22,7 @@ import com.shuzijun.leetcode.plugin.utils.DataKeys;
 import com.shuzijun.leetcode.plugin.utils.HttpRequestUtils;
 import com.shuzijun.leetcode.plugin.utils.LogUtils;
 import com.shuzijun.leetcode.plugin.utils.URLUtils;
+import com.shuzijun.leetcode.plugin.window.login.HttpLogin;
 import com.shuzijun.leetcode.plugin.window.navigator.AllNavigatorPanel;
 import com.shuzijun.leetcode.plugin.window.navigator.NavigatorPanel;
 import com.shuzijun.leetcode.plugin.window.navigator.TopNavigatorPanel;
@@ -170,6 +171,9 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
     @NotNull
     public User getUser() {
+        // 重開 IDE 後記憶體 client 是空的，先把磁碟 cookie 載回，下方走 QuestionManager.getUser() 才不會誤判未登入。
+        // 冪等且低成本（hasSessionCookie 命中即 return），放這裡覆蓋所有 getUser 路徑。
+        HttpLogin.restorePersistedCookies();
         Config config = PersistentConfig.getInstance().getInitConfig();
         if (config == null) {
             return new User();
@@ -179,7 +183,12 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
             String otherKey = NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.getOtherKey(id);
             if (otherKey == null || !((NavigatorTabsPanel) NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.get(otherKey)).userCache.containsKey(config.getUrl())) {
                 User user = QuestionManager.getUser();
-                userCache.put(config.getUrl(), user);
+                // 有 session cookie 卻查到未登入 → 多半是網路抖動或 restore 時序（QuestionManager.getUser 對網路失敗
+                // 與真未登入都回空 User，無法區分），不快取這個「假未登入」，下次 getUser 會重查而自我恢復；
+                // 否則一次抖動就永久卡未登入、又得手動 login，本次自動登入形同白做。
+                if (user.isSignedIn() || !HttpRequestUtils.hasSessionCookie()) {
+                    userCache.put(config.getUrl(), user);
+                }
                 return user;
             } else {
                 User user = ((NavigatorTabsPanel) NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.get(otherKey)).userCache.get(config.getUrl());
