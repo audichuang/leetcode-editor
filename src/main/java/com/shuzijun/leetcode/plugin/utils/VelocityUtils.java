@@ -12,8 +12,8 @@ import java.util.Properties;
  */
 public class VelocityUtils {
 
-    private static String VM_LOG_TAG = "Leetcode VelocityUtils";
-    private static String VM_CONTEXT = "question";
+    private static final String VM_LOG_TAG = "Leetcode VelocityUtils";
+    private static final String VM_CONTEXT = "question";
     private static VelocityEngine engine;
 
 
@@ -36,12 +36,10 @@ public class VelocityUtils {
         StringWriter writer = new StringWriter();
         VelocityContext velocityContext = new VelocityContext();
         velocityContext.put(VM_CONTEXT, data);
+        // 每次各 new 一個：舊行為讓自訂 template 的 $velocityTool 與 $vt 是不同物件（identity 可被 template 觀察），共用單例會破壞語意等價
         velocityContext.put("velocityTool", new VelocityTool());
         velocityContext.put("vt", new VelocityTool());
-        boolean isSuccess = engine.evaluate(velocityContext, writer, VM_LOG_TAG, template);
-        if (!isSuccess) {
-
-        }
+        engine.evaluate(velocityContext, writer, VM_LOG_TAG, template);
         return writer.toString();
     }
 }

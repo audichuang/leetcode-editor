@@ -16,6 +16,7 @@
 - `converge/*Preview` 的資料抓取**一律在背景緒**，EDT 只組 UI，且回呼要檢查 `project.isDisposed() || disposed || myGen != generation`（防面板關閉後/亂序覆蓋）。別退回同步 `.get()`。
 - `LCVFileType.getCharset()` 固定回 UTF-8（上游 #373 亂碼根因），別移除。
 - `LCVPanel` 遠端圖片只在有 IDE proxy 時才走中轉（#553），無 proxy 維持 JCEF 直連——別改成一律中轉。
+- 內容/題解預覽用**靜態 `Vditor.preview`**（`default.html` 載 `method.min.js`），不是完整 `new Vditor` 編輯器（省 SV editor 建構 + preview 固定 1s debounce）。別退回完整 editor；template 裡手動補的 `.vditor`/`.vditor--dark` class、`lang`、置中 padding 是修「靜態模式相對完整 editor」的語系/版面回歸，別當多餘刪；主題切換走 static `Vditor.setContentTheme`/`setCodeTheme`（無 instance）。
 
 ## 踩雷
 - **每開一題就 new 一個 JCEF 瀏覽器實例**（單一實例吃數十~上百 MB）。別「優化」成單例/池化——那會犧牲多題同時預覽的功能。

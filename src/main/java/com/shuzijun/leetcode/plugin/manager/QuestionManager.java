@@ -15,7 +15,8 @@ import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -33,6 +34,8 @@ public class QuestionManager {
     private static final Striped<Lock> keyLocks = Striped.lock(64);
     // 帳號/session 切換 (invalidateAll) 時遞增；在途的 getQuestionAllService 大請求發現世代已變就放棄寫回，避免覆蓋新帳號的快取
     private static volatile int generation = 0;
+    // DateTimeFormatter 為 immutable/thread-safe，共用一份即可（SimpleDateFormat 非 thread-safe 且每次 new 偏重）
+    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private static final class AllHolder {
         private final List<QuestionView> list;
@@ -210,7 +213,7 @@ public class QuestionManager {
     }
 
     public static QuestionView questionOfToday() {
-        QuestionView dayQuestion = dayMap.getIfPresent(URLUtils.getLeetcodeHost() + new SimpleDateFormat("yyyy-MM-dd").format(new Date()));
+        QuestionView dayQuestion = dayMap.getIfPresent(URLUtils.getLeetcodeHost() + LocalDate.now().format(DAY_FMT));
         if (dayQuestion == null) {
             try {
                 HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("questionOfToday").request();

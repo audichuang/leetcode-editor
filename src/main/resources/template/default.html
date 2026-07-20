@@ -3,11 +3,12 @@
     <meta charset="UTF-8">
     <link rel="stylesheet" href="{{service}}resources/vditor/dist/index.css?{{serverToken}}"/>
     <link rel="stylesheet" href="{{service}}resources/vditor/style.css?{{serverToken}}"/>
-    <script src="{{service}}resources/vditor/dist/index.min.js?{{serverToken}}"></script>
-    <script src="{{service}}resources/vditor/jquery-3.6.0.min.js?{{serverToken}}"></script>
+    <!-- 唯讀題目/題解只需靜態渲染：用 method.min.js(97KB) 的 Vditor.preview，取代完整編輯器 index.min.js(631KB)+jquery。
+         省掉「建整個 SV 編輯器 DOM、SV 二次解析、建完再刪 toolbar/SV」的初始化成本。 -->
+    <script src="{{service}}resources/vditor/dist/method.min.js?{{serverToken}}"></script>
 </head>
 <body className="body" style="margin: 0px;">
-<div id="vditor" className="vditor vditor--fullscreen" style="height: 100%"></div>
+<div id="vditor" class="vditor" style="height: 100%"></div>
 <textarea id="fileValue" style="display:none;">
 {{fileValue}}
 </textarea>
@@ -17,41 +18,47 @@
     const vditorThemeCDN = "{{service}}resources/vditor/dist/css/content-theme";
     const darcula = "{{darcula}}" == "true";
 
-    window.onload = function () {
-        $(".vditor-toolbar")[0].remove();
-        $(".vditor-sv")[0].remove();
-        $(".vditor-preview").find(".vditor-reset").css("max-width","90%" )
-    }
-    const vditor = new Vditor('vditor', {
-        "mode": "sv",
-        "theme": darcula ? "dark" : "light",
-        "lang": "{{Lang}}",
-        "cache": {
-            "enable": false
-        },
-        "toolbarConfig": {"hide": true},
-        "cdn": vditorCDN,
-        "preview": {
+    function renderPreview() {
+        Vditor.preview(document.getElementById("vditor"), document.getElementById("fileValue").innerText, {
+            "mode": darcula ? "dark" : "light",
+            "lang": "{{Lang}}",
+            "cdn": vditorCDN,
             "theme": {
                 "current": darcula ? "idea-dark" : "idea-light",
                 "path": vditorThemeCDN
             },
-            "maxWidth": $(window).width() - 100,
-            "actions": [],
             "hljs": {"style": darcula ? "dracula" : "github"},
             "math": {
                 "inlineDigit": true
+            },
+            "after": function () {
+                // 靜態 preview 只會替目標元素加 .vditor-reset，不像完整 editor 會補 .vditor/.vditor--dark
+                // root class；手動補上，讓 Java getStyle() 產生的 .vditor/.vditor--dark 樣式能命中。
+                // 同時補回舊版 .vditor-preview wrapper 的置中與 padding（新版無 wrapper）。
+                let el = document.getElementById("vditor");
+                if (el) {
+                    el.classList.add("vditor");
+                    if (darcula) { el.classList.add("vditor--dark"); }
+                    el.style.maxWidth = "90%";
+                    el.style.margin = "0 auto";
+                    el.style.padding = "10px";
+                }
             }
-        },
-        "value": document.getElementById("fileValue").innerText
-    });
-    function updateStyle(style,darcula){
+        });
+    }
+    renderPreview();
+
+    function updateStyle(style, darcula) {
         let newStyle = document.createElement('style');
         newStyle.id = 'ideaStyle';
         newStyle.innerHTML = style;
         let oldStyle = document.getElementById('ideaStyle');
-        oldStyle.parentNode.replaceChild(newStyle,oldStyle);
-        vditor.setTheme(darcula? "dark" : "light",darcula ? "idea-dark" : "idea-light",darcula ? "dracula" : "github",vditorThemeCDN)
+        oldStyle.parentNode.replaceChild(newStyle, oldStyle);
+        // 靜態 preview 沒有 Vditor instance：主題切換改 static API + 同步 root 的 dark class
+        let el = document.getElementById("vditor");
+        if (el) { el.classList.toggle("vditor--dark", darcula); }
+        Vditor.setContentTheme(darcula ? "idea-dark" : "idea-light", vditorThemeCDN);
+        Vditor.setCodeTheme(darcula ? "dracula" : "github", vditorCDN);
     }
 </script>
 {{ideStyle}}

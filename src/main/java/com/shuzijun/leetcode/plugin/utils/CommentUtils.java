@@ -14,15 +14,16 @@ import java.util.regex.Pattern;
 public class CommentUtils {
 
     private static final Pattern subPattern = Pattern.compile("<sup>(<span.*>?)?([0-9abcdeghijklmnoprstuvwxyz\\+\\-\\*=\\(\\)\\.\\/]+)(</span>)?</sup>?");
+    private static final Pattern NEWLINE_PATTERN = Pattern.compile("(\\r\\n|\\r|\\n|\\n\\r)");
 
     public static String createComment(String html, CodeTypeEnum codeTypeEnum, Config config) {
         boolean isSupportMultilineComment =  config.getMultilineComment() && StringUtils.isNotBlank(codeTypeEnum.getMultiLineComment());
-        html = html.replaceAll("(\\r\\n|\\r|\\n|\\n\\r)", "\\\\n").replaceAll(" "," ");
+        html = NEWLINE_PATTERN.matcher(html).replaceAll("\\\\n").replaceAll(" "," ");
         if(config.getHtmlContent()) {
             if(isSupportMultilineComment){
-                return String.format(codeTypeEnum.getMultiLineComment(),html.replaceAll("\\\\n", "\n"));
+                return String.format(codeTypeEnum.getMultiLineComment(),html.replace("\\n", "\n"));
             }else {
-               return codeTypeEnum.getComment() + html.replaceAll("\\\\n", "\n" + codeTypeEnum.getComment());
+               return codeTypeEnum.getComment() + html.replace("\\n", "\n" + codeTypeEnum.getComment());
             }
         }
         Matcher subMatcher = subPattern.matcher(html);
@@ -31,7 +32,7 @@ public class CommentUtils {
             html = html.replace(subMatcher.group(), "<sup>" + subStr + "</sup>");
         }
         String comment = isSupportMultilineComment?"":codeTypeEnum.getComment();
-        String body = comment + Jsoup.parse(html).text().replaceAll("\\\\n", "\n" + comment);
+        String body = comment + Jsoup.parse(html).text().replace("\\n", "\n" + comment);
         String[] lines = body.split("\n");
         StringBuilder sb = new StringBuilder();
         for (String line : lines) {

@@ -17,10 +17,12 @@ import com.shuzijun.leetcode.plugin.setting.ProjectConfig;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 
 /**
  * @author shuzijun
@@ -49,9 +51,9 @@ public class FileUtils {
                 MessageUtils.showAllWarnMsg("error", PropertiesUtils.getInfo("file.save.failed", file.getPath()));
                 return;
             }
-            FileOutputStream fileOutputStream = new FileOutputStream(file, Boolean.FALSE);
-            fileOutputStream.write(body.getBytes("UTF-8"));
-            fileOutputStream.close();
+            try (FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
+                fileOutputStream.write(body.getBytes(StandardCharsets.UTF_8));
+            }
         } catch (IOException io) {
             LogUtils.LOG.error("保存文件错误", io);
             MessageUtils.showAllWarnMsg("error", PropertiesUtils.getInfo("file.save.failed", file.getAbsolutePath()));
@@ -63,42 +65,41 @@ public class FileUtils {
     }
 
     public static String getFileBody(File file) {
-        String all = "";
-        if (file.exists()) {
-            Long filelength = file.length();
-            byte[] filecontent = new byte[filelength.intValue()];
-            try {
-                FileInputStream in = new FileInputStream(file);
-                in.read(filecontent);
-                in.close();
-                all = new String(filecontent, "UTF-8");
-            } catch (IOException i) {
-                LogUtils.LOG.error("读取文件错误", i);
-
-            }
+        if (!file.exists()) {
+            return "";
         }
-        return all;
+        try {
+            // Files.readAllBytes 保證讀滿整檔（原本 in.read(buf) 忽略回傳值，大檔可能讀不滿）並自動關檔
+            return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        } catch (IOException i) {
+            LogUtils.LOG.error("读取文件错误", i);
+            return "";
+        }
     }
 
     public static String getClearCommentFileBody(File file, CodeTypeEnum codeTypeEnum) {
 
         VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
         saveEditDocument(vf);
-        StringBuffer code = new StringBuffer();
+        StringBuilder code = new StringBuilder();
         try {
             String body = ApplicationManager.getApplication().runReadAction((Computable<String>) () -> FileDocumentManager.getInstance().getDocument(vf).getText());
             if (StringUtils.isNotBlank(body)) {
 
-                List<String> codeList = new LinkedList<>();
+                // ArrayList 而非 LinkedList：下面兩處用 get(i) 索引存取，LinkedList 的 get 是 O(n) → 整段 O(n²)
+                List<String> codeList = new ArrayList<>();
                 List<Integer> codeBegins = new ArrayList<>();
                 List<Integer> codeEnds = new ArrayList<>();
-                Integer lineCount = 0;
+                int lineCount = 0;
+                // 區塊標記是常數，提到迴圈外算一次（原本每行都重新字串串接 + trim）
+                String beginMark = trim(codeTypeEnum.getComment() + Constant.SUBMIT_REGION_BEGIN);
+                String endMark = trim(codeTypeEnum.getComment() + Constant.SUBMIT_REGION_END);
 
                 String[] lines = body.split("\r\n|\r|\n");
                 for (String line : lines) {
-                    if (StringUtils.isNotBlank(line) && trim(line).equals(trim(codeTypeEnum.getComment() + Constant.SUBMIT_REGION_BEGIN))) {
+                    if (StringUtils.isNotBlank(line) && trim(line).equals(beginMark)) {
                         codeBegins.add(lineCount);
-                    } else if (StringUtils.isNotBlank(line) && trim(line).equals(trim(codeTypeEnum.getComment() + Constant.SUBMIT_REGION_END))) {
+                    } else if (StringUtils.isNotBlank(line) && trim(line).equals(endMark)) {
                         codeEnds.add(lineCount);
                     }
                     codeList.add(line);
@@ -133,8 +134,11 @@ public class FileUtils {
         return code.toString();
     }
 
+    // 維持原字元類別 [\s|\t]（\s 已含 tab、| 為字面 pipe），僅改為預編譯避免每次呼叫重 compile
+    private static final Pattern TRIM_PATTERN = Pattern.compile("[\\s|\\t]");
+
     public static String trim(String str) {
-        return str.replaceAll("[\\s|\\t]", "");
+        return TRIM_PATTERN.matcher(str).replaceAll("");
     }
 
     public static void copyDirectory(File srcDir, File destDir) throws IOException {
