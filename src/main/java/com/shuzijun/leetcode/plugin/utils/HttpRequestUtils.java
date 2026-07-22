@@ -3,13 +3,10 @@ package com.shuzijun.leetcode.plugin.utils;
 import com.google.common.base.Utf8;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.intellij.openapi.application.Application;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
-import com.intellij.util.net.HttpConfigurable;
-import com.intellij.util.net.IdeaWideProxySelector;
-import com.intellij.util.proxy.NonStaticAuthenticator;
+import com.intellij.util.net.JdkProxyProvider;
+import com.intellij.util.net.ProxyConfiguration;
+import com.intellij.util.net.ProxySettings;
 import com.shuzijun.lc.LcClient;
 import com.shuzijun.lc.errors.LcException;
 import com.shuzijun.lc.http.DefaultExecutoHttp;
@@ -19,15 +16,16 @@ import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import okhttp3.Challenge;
 import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
-import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.Nls;
+import okhttp3.Route;
 import org.jetbrains.annotations.NotNull;
 
+import java.net.Authenticator;
 import java.net.HttpCookie;
+import java.net.InetSocketAddress;
 import java.net.PasswordAuthentication;
+import java.net.SocketAddress;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -219,19 +217,12 @@ public class HttpRequestUtils {
 
         // lc-sdk 預設 timeout 為 connect 600s / read+write 1800s，慢連線會掛住半小時，改為合理值
         private volatile OkHttpClient directClient;
-        // key 與 client 合併成單一 immutable holder，用單一 volatile 欄位原子發布，
-        // 避免並行請求讀到「client B + key A」的撕裂狀態而命中沒有正確 authenticator 的 client
-        private volatile ProxyHolder proxyHolder;
-
-        private static final class ProxyHolder {
-            private final String key;
-            private final OkHttpClient client;
-
-            private ProxyHolder(String key, OkHttpClient client) {
-                this.key = key;
-                this.client = client;
-            }
-        }
+        // 平台 ProxySettings/JdkProxyProvider 底下的 ProxySelector 與 Authenticator 都是 live 的——
+        // IDE 設定變更會即時反映到同一個 selector/authenticator 實例，不需要像早期改法那樣
+        // 用 protocol+host+port+authFlag 組合出 cache key 來偵測設定變化再重建 client；
+        // 因此 proxy client 只需一個 lazily-built 單例（原本的 per-config key 反而在 credentials
+        // 單獨變更、其餘欄位不變時會產生 stale-key 命中舊 client 的漂移問題）。
+        private volatile OkHttpClient proxyClient;
 
         private OkHttpClient getDirectClient() {
             if (directClient == null) {
@@ -242,122 +233,80 @@ public class HttpRequestUtils {
 
         @Override
         public OkHttpClient getRequestClient() {
-            final HttpConfigurable httpConfigurable = HttpConfigurable.getInstance();
-            if (!httpConfigurable.USE_HTTP_PROXY && !httpConfigurable.USE_PROXY_PAC) {
+            // 無 IDE proxy 設定時直連，保住 #553（JCEF/HTTP 客戶端一致：無 proxy 不中轉）與
+            // lc-sdk timeout override（直連 client 才有 newDefaultHttpClient(10,30,30)）不變式。
+            if (ProxySettings.getInstance().getProxyConfiguration() instanceof ProxyConfiguration.DirectProxy) {
                 return getDirectClient();
             }
-            String key = httpConfigurable.USE_HTTP_PROXY + "|" + httpConfigurable.USE_PROXY_PAC + "|" + httpConfigurable.PROXY_AUTHENTICATION
-                    + "|" + httpConfigurable.PROXY_HOST + ":" + httpConfigurable.PROXY_PORT;
-            ProxyHolder holder = proxyHolder;
-            if (holder != null && key.equals(holder.key)) {
-                return holder.client;
+            OkHttpClient client = proxyClient;
+            if (client == null) {
+                // proxy client 一律由 getDirectClient().newBuilder() 建，確保沿用同一組 timeout。
+                client = getDirectClient().newBuilder()
+                        .proxySelector(JdkProxyProvider.getInstance().getProxySelector())
+                        .proxyAuthenticator(getProxyAuthenticator())
+                        .build();
+                proxyClient = client;
             }
-            final IdeaWideProxySelector ideaWideProxySelector = new IdeaWideProxySelector(httpConfigurable);
-            OkHttpClient.Builder builder = getDirectClient().newBuilder().proxySelector(ideaWideProxySelector);
-            if (httpConfigurable.PROXY_AUTHENTICATION) {
-                final MyAuthenticator ideaWideAuthenticator = new MyAuthenticator(httpConfigurable);
-                final okhttp3.Authenticator proxyAuthenticator = getProxyAuthenticator(ideaWideAuthenticator);
-                builder.proxyAuthenticator(proxyAuthenticator);
-            }
-            OkHttpClient built = builder.build();
-            proxyHolder = new ProxyHolder(key, built);
-            return built;
+            return client;
         }
 
-        private okhttp3.Authenticator getProxyAuthenticator(MyAuthenticator ideaWideAuthenticator) {
-            okhttp3.Authenticator proxyAuthenticator = null;
+        // OkHttp 對 HTTPS CONNECT 會先合成一個 scheme=OkHttp-Preemptive 的假 407 讓 authenticator 有機會
+        // 搶先帶 header（真 proxy 從沒發過這個 challenge）。這個 preemptive 分支只准讀平台「已存」的憑證
+        // （ProxyAuthentication.getKnownAuthentication，查無就回 null，讓請求裸送——需要認證的 proxy
+        // 自會回真 407），絕不可呼叫 JdkProxyProvider.getAuthenticator()：那條路查無已知憑證時會直接彈
+        // AuthenticationDialog，對「根本不需要認證的 proxy」也會無端跳窗卡住網路執行緒。
+        // 真 407（route 上真的收到非 preemptive challenge）才走 JdkProxyProvider 的完整流程，彈窗才是對
+        // 正當 challenge 的提示；並用 Proxy-Authorization header 是否已存在擋掉重複認證的無窮重試迴圈。
+        private okhttp3.Authenticator getProxyAuthenticator() {
+            return (route, response) -> {
+                InetSocketAddress proxyAddress = routeProxyAddress(route);
+                if (proxyAddress == null) {
+                    return null;
+                }
 
-            if (Objects.nonNull(ideaWideAuthenticator)) {
-                proxyAuthenticator = (route, response) -> {
-                    ideaWideAuthenticator.SetResponse(response);
-                    final PasswordAuthentication authentication = ideaWideAuthenticator.getPasswordAuthentication();
-                    if (authentication == null) {
+                boolean preemptive = false;
+                for (Challenge challenge : response.challenges()) {
+                    if (challenge.scheme().equalsIgnoreCase("OkHttp-Preemptive")) {
+                        preemptive = true;
+                        break;
+                    }
+                }
+
+                if (preemptive) {
+                    com.intellij.credentialStore.Credentials known = com.intellij.util.net.ProxyAuthentication.getInstance()
+                            .getKnownAuthentication(proxyAddress.getHostString(), proxyAddress.getPort());
+                    if (known == null || known.getUserName() == null || known.getPasswordAsString() == null) {
                         return null;
                     }
-                    final String credential = Credentials.basic(authentication.getUserName(), new String(authentication.getPassword()));
+                    return response.request().newBuilder()
+                            .header("Proxy-Authorization", Credentials.basic(known.getUserName(), known.getPasswordAsString()))
+                            .build();
+                }
 
-                    for (Challenge challenge : response.challenges()) {
-                        if (challenge.scheme().equalsIgnoreCase("OkHttp-Preemptive")) {
-                            return response.request().newBuilder()
-                                    .header("Proxy-Authorization", credential)
-                                    .build();
-                        }
-                    }
-                    return null;
-                };
-            }
-            return proxyAuthenticator;
-        }
-    }
-
-    private static class MyAuthenticator extends NonStaticAuthenticator {
-        private static final Logger LOG = Logger.getInstance(com.intellij.util.net.IdeaWideAuthenticator.class);
-        private final HttpConfigurable myHttpConfigurable;
-
-        private okhttp3.Response response;
-
-        public MyAuthenticator(@NotNull HttpConfigurable configurable) {
-            super();
-            this.myHttpConfigurable = configurable;
-        }
-
-
-        public void SetResponse(okhttp3.Response response) {
-            this.response = response;
-        }
-
-        public PasswordAuthentication getPasswordAuthentication() {
-            okhttp3.HttpUrl url = response.request().url();
-            Application application = ApplicationManager.getApplication();
-
-            if (StringUtils.isNoneBlank(myHttpConfigurable.getPlainProxyPassword()) && StringUtils.isNoneBlank(myHttpConfigurable.getProxyLogin())) {
-                return new PasswordAuthentication(myHttpConfigurable.getProxyLogin(), myHttpConfigurable.getPlainProxyPassword().toCharArray());
-            }
-
-            if (this.myHttpConfigurable.USE_HTTP_PROXY) {
-                LOG.debug("CommonAuthenticator.getPasswordAuthentication will return common defined proxy");
-                return this.myHttpConfigurable.getPromptedAuthentication(url.host() + ":" + url.port(), this.getRequestingPrompt());
-            }
-
-            if (this.myHttpConfigurable.USE_PROXY_PAC) {
-                LOG.debug("CommonAuthenticator.getPasswordAuthentication will return autodetected proxy");
-                if (this.myHttpConfigurable.isGenericPasswordCanceled(this.getRequestingHost(), this.getRequestingPort())) {
+                // 防迴圈：已帶過 Proxy-Authorization 卻又收到 407，代表憑證無效，別再重試觸發下一輪彈窗
+                if (response.request().header("Proxy-Authorization") != null) {
                     return null;
                 }
-
-                PasswordAuthentication password = this.myHttpConfigurable.getGenericPassword(this.getRequestingHost(), this.getRequestingPort());
-                if (password != null) {
-                    return password;
+                Authenticator platformAuthenticator = JdkProxyProvider.getInstance().getAuthenticator();
+                PasswordAuthentication authentication = platformAuthenticator.requestPasswordAuthenticationInstance(
+                        proxyAddress.getHostString(), null, proxyAddress.getPort(), "http",
+                        PluginConstant.PLUGIN_ID, null, response.request().url().url(),
+                        Authenticator.RequestorType.PROXY);
+                if (authentication == null) {
+                    return null;
                 }
+                return response.request().newBuilder()
+                        .header("Proxy-Authorization", Credentials.basic(authentication.getUserName(), new String(authentication.getPassword())))
+                        .build();
+            };
+        }
 
-                if (application != null && !application.isDisposed()) {
-                    return this.myHttpConfigurable.getGenericPromptedAuthentication(PluginConstant.PLUGIN_ID, this.getRequestingHost(), this.getRequestingPrompt(), this.getRequestingPort(), true);
-                }
-
+        private static InetSocketAddress routeProxyAddress(Route route) {
+            if (route == null) {
                 return null;
             }
-
-            if (application != null && !application.isDisposed()) {
-                LOG.debug("CommonAuthenticator.getPasswordAuthentication generic authentication will be asked");
-                return null;
-            } else {
-                return null;
-            }
-        }
-
-        @Override
-        protected String getRequestingHost() {
-            return response.request().url().host();
-        }
-
-        @Override
-        protected int getRequestingPort() {
-            return response.request().url().port();
-        }
-
-        @Override
-        protected @Nls String getRequestingPrompt() {
-            return PluginConstant.PLUGIN_ID;
+            SocketAddress socketAddress = route.proxy().address();
+            return socketAddress instanceof InetSocketAddress ? (InetSocketAddress) socketAddress : null;
         }
     }
 }

@@ -25,7 +25,8 @@ import com.intellij.util.Url;
 import com.intellij.util.Urls;
 import com.intellij.util.io.HttpRequests;
 import com.intellij.util.io.URLUtil;
-import com.intellij.util.net.HttpConfigurable;
+import com.intellij.util.net.ProxyConfiguration;
+import com.intellij.util.net.ProxySettings;
 import com.intellij.util.ui.StartupUiUtil;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.utils.FileUtils;
@@ -114,8 +115,7 @@ public class LCVPanel extends JCEFHtmlPanel {
                 // 题目描述里的<img>直连LeetCode CDN时JCEF会忽略IDE的proxy设置导致图片加载失败，
                 // 这里对非本地服务的图片请求也走和iframe一样的代理通道；
                 // 仅在用户配置了IDE proxy时才需要这个中转，未配置proxy时JCEF可直连，维持原行为（避免#553引入的回归）
-                final HttpConfigurable httpConfigurable = HttpConfigurable.getInstance();
-                boolean useProxy = httpConfigurable.USE_HTTP_PROXY || httpConfigurable.USE_PROXY_PAC;
+                boolean useProxy = !(ProxySettings.getInstance().getProxyConfiguration() instanceof ProxyConfiguration.DirectProxy);
                 boolean isRemoteImage = useProxy && !isIframeRequest && request.getResourceType() == CefRequest.ResourceType.RT_IMAGE
                         && requestUrl.startsWith(URLUtil.HTTP_PROTOCOL) && !requestUrl.startsWith(localServicePrefix);
                 if (!isIframeRequest && !isRemoteImage) {
