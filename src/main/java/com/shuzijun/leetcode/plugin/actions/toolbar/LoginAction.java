@@ -11,7 +11,6 @@ import com.shuzijun.leetcode.plugin.model.HttpRequest;
 import com.shuzijun.leetcode.plugin.setting.PersistentConfig;
 import com.shuzijun.leetcode.plugin.utils.*;
 import com.shuzijun.leetcode.plugin.window.NavigatorTabsPanel;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import com.shuzijun.leetcode.plugin.window.login.HttpLogin;
 import com.shuzijun.leetcode.plugin.window.login.LoginPanel;
 import org.apache.commons.lang3.StringUtils;
@@ -27,7 +26,7 @@ public class LoginAction extends AbstractAction implements DumbAware {
     @Override
     public synchronized void actionPerformed(AnActionEvent anActionEvent, Config config) {
 
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
 
         if (StringUtils.isBlank(HttpRequestUtils.getToken())) {
             HttpResponse response = HttpRequest.builderGet(URLUtils.getLeetcodeVerify()).request();

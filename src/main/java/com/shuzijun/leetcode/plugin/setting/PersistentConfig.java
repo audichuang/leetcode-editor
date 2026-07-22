@@ -95,12 +95,16 @@ public class PersistentConfig implements PersistentStateComponent<PersistentConf
         if (username == null || password == null) {
             return;
         }
-        PasswordSafe.getInstance().set(new CredentialAttributes(PluginConstant.PLUGIN_ID, username, this.getClass()), new Credentials(username, password));
+        // ponytail: 3-arg CredentialAttributes(serviceName, userName, requestor) is @Deprecated(ERROR) in 262.
+        // Deliberately NOT switching to generateServiceName(requestor) — that changes serviceName and would
+        // orphan users' already-saved passwords. The 2-arg ctor keeps serviceName/userName identical, so the
+        // PasswordSafe storage key is unchanged and existing credentials keep resolving.
+        PasswordSafe.getInstance().set(new CredentialAttributes(PluginConstant.PLUGIN_ID, username), new Credentials(username, password));
     }
 
     public String getPassword(String username) {
         if (getConfig().getVersion() != null && username != null) {
-            return PasswordSafe.getInstance().getPassword(new CredentialAttributes(PluginConstant.PLUGIN_ID, username, this.getClass()));
+            return PasswordSafe.getInstance().getPassword(new CredentialAttributes(PluginConstant.PLUGIN_ID, username));
         }
         return null;
 

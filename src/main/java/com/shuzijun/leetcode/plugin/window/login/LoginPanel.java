@@ -227,8 +227,10 @@ public class LoginPanel extends DialogWrapper {
         public void dispose() {
             getJBCefClient().removeLoadHandler(cefLoadHandler, getCefBrowser());
             try {
-                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, false);
-                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, false);
+                // ponytail: deleteCookies(url, boolean) is deprecated in 262; deleteCookies(url, cookieName)
+                // with cookieName=null means "delete all cookies for this url", same effect as the old overload.
+                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, (String) null);
+                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, (String) null);
             } catch (Exception e) {
                 // ponytail: cef_server may not be established yet when the dialog closes early (#754); clearing
                 // cookies is best-effort, next login overwrites them, so just log and continue disposing.

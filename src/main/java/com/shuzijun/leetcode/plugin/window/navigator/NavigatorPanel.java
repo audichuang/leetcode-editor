@@ -260,11 +260,6 @@ public class NavigatorPanel extends SimpleToolWindowPanel implements NavigatorPa
     }
 
     @Override
-    public Object getData(String dataId) {
-        return super.getData(dataId);
-    }
-
-    @Override
     public void dispose() {
         navigatorTable.dispose();
     }

@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project;
 import com.shuzijun.leetcode.plugin.model.Constant;
 import com.shuzijun.leetcode.plugin.model.HttpRequest;
 import com.shuzijun.leetcode.plugin.model.Tag;
+import com.shuzijun.leetcode.plugin.model.User;
 import com.shuzijun.leetcode.plugin.utils.*;
 import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.apache.commons.lang3.StringUtils;
@@ -72,8 +73,9 @@ public class FindManager {
     public static List<Tag> getLists(Project project) {
         List<Tag> tags = new ArrayList<>();
 
+        User user = WindowFactory.getUser(project);
         HttpResponse response =  HttpRequest.builderGet(URLUtils.getLeetcodeFavorites())
-                .cacheParam(WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser().getUsername()).request();
+                .cacheParam(user == null ? null : user.getUsername()).request();
         if (response.getStatusCode() == 200) {
             try {
                 String body = response.getBody();

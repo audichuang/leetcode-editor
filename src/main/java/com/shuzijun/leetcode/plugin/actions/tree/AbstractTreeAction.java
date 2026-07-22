@@ -3,13 +3,11 @@ package com.shuzijun.leetcode.plugin.actions.tree;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbAware;
 import com.shuzijun.leetcode.plugin.actions.AbstractAction;
-import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.Config;
 import com.shuzijun.leetcode.plugin.model.Question;
 import com.shuzijun.leetcode.plugin.model.QuestionView;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 
 /**
  * @author shuzijun
@@ -18,11 +16,12 @@ public abstract class AbstractTreeAction extends AbstractAction implements DumbA
 
     @Override
     public void actionPerformed(AnActionEvent anActionEvent, Config config) {
-        NavigatorAction<QuestionView> navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
-        if (navigatorAction == null) {
-            return;
-        }
-        QuestionView questionView = navigatorAction.getSelectedRowData();
+        // Reads the LEETCODE_PROJECTS_SELECTED_QUESTION snapshot key instead of the live
+        // NavigatorAction: this runs inside a Task.Backgroundable (AbstractAction.java:44), a
+        // background thread, and NavigatorAction#getSelectedRowData() would call
+        // JTable.getSelectedRow() off-EDT. NavigatorTabsPanel#uiDataSnapshot() already resolved
+        // this key on EDT while the platform snapshotted the event's DataContext.
+        QuestionView questionView = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION);
         if (questionView == null) {
             return;
         }

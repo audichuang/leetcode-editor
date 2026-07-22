@@ -1,6 +1,7 @@
 package com.shuzijun.leetcode.plugin.window;
 
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.actionSystem.DataSink;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
@@ -13,6 +14,7 @@ import com.intellij.util.messages.MessageBusConnection;
 import com.shuzijun.leetcode.plugin.listener.ConfigNotifier;
 import com.shuzijun.leetcode.plugin.listener.LoginNotifier;
 import com.shuzijun.leetcode.plugin.listener.QuestionStatusNotifier;
+import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.Config;
 import com.shuzijun.leetcode.plugin.model.QuestionView;
@@ -28,6 +30,7 @@ import com.shuzijun.leetcode.plugin.window.navigator.AllNavigatorPanel;
 import com.shuzijun.leetcode.plugin.window.navigator.NavigatorPanel;
 import com.shuzijun.leetcode.plugin.window.navigator.TopNavigatorPanel;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -48,20 +51,26 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
     private String id = UUID.randomUUID().toString();
 
+    // held only to clear WindowFactory.NAVIGATOR_PANEL_KEY in dispose(); never used for Swing/UI work.
+    private final Project project;
+
     private SimpleToolWindowPanel[] navigatorPanels;
     private TabInfo[] tabInfos;
 
     private JBTabs tabs;
 
-    // volatile: written on EDT (toggle()/constructor), read on BGT via getData()
-    // (FindActionGroup/FavoriteActionGroup now run ActionUpdateThread.BGT), so a
-    // plain int risks a stale read across threads.
+    // volatile: written on EDT (toggle()/constructor). Two read paths: uiDataSnapshot()
+    // itself runs on EDT (snapshot time), but WindowFactory.getNavigatorAction(project)
+    // -> getCurrentNavigatorAction() is reached from cross-context action callers whose
+    // update() runs on BGT (PositionAction), so a plain int risks a stale read.
     private volatile int toggleIndex = 0;
 
     private volatile Map<String, User> userCache = new ConcurrentHashMap<>();
 
     public NavigatorTabsPanel(ToolWindow toolWindow, Project project) {
         super(Boolean.TRUE, Boolean.TRUE);
+
+        this.project = project;
 
         navigatorPanels = new SimpleToolWindowPanel[3];
         tabInfos = new TabInfo[3];
@@ -199,40 +208,42 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
         }
     }
 
+    // toggleIndex is volatile, so this is a safe read from any thread (BGT included).
+    @Nullable
+    public NavigatorAction getCurrentNavigatorAction() {
+        SimpleToolWindowPanel panel = navigatorPanels[toggleIndex];
+        if (panel instanceof NavigatorPanelAction) {
+            return ((NavigatorPanelAction) panel).getNavigatorAction();
+        }
+        return null;
+    }
+
     @Override
-    public Object getData(String dataId) {
-        for (SimpleToolWindowPanel navigatorPanel : navigatorPanels) {
-            Object object = navigatorPanel.getData(dataId);
-            if (object != null) {
-                return object;
-            }
-        }
-        if (DataKeys.LEETCODE_PROJECTS_TABS.is(dataId)) {
-            return this;
-        }
-        if (DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION.is(dataId)) {
-            SimpleToolWindowPanel panel = navigatorPanels[toggleIndex];
-            if (panel instanceof NavigatorPanelAction) {
-                return ((NavigatorPanelAction) panel).getNavigatorAction();
-            }
-        }
-        if (DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION.is(dataId)) {
+    public void uiDataSnapshot(@NotNull DataSink sink) {
+        super.uiDataSnapshot(sink);
+        sink.set(DataKeys.LEETCODE_PROJECTS_TABS, this);
+        NavigatorAction navigatorAction = getCurrentNavigatorAction();
+        if (navigatorAction != null) {
+            sink.set(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION, navigatorAction);
             // Swing JTable read (getSelectedRowData()) must happen here, on EDT during the
             // platform's DataContext snapshot — never inside a BGT action/group's getChildren().
-            SimpleToolWindowPanel panel = navigatorPanels[toggleIndex];
-            if (panel instanceof NavigatorPanelAction) {
-                Object rowData = ((NavigatorPanelAction) panel).getNavigatorAction().getSelectedRowData();
-                return rowData instanceof QuestionView ? rowData : null;
+            Object rowData = navigatorAction.getSelectedRowData();
+            if (rowData instanceof QuestionView) {
+                sink.set(DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION, (QuestionView) rowData);
             }
         }
-
-        return super.getData(dataId);
     }
 
     @Override
     public void dispose() {
         // 子面板已在建構子用 Disposer.register(this, ...) 接管，平台 Disposer 會先銷毀子節點再回呼這裡；
         // 別再手動逐一 dispose，否則雙重 disposal。
+        // compare-and-clear：只清「還是自己」的註冊，避免萬一平台先建立/註冊了新 panel、才 dispose 舊
+        // panel 時，把存活 panel 的註冊給抹掉（否則 WindowFactory.getUser/getNavigatorAction 對該
+        // project 會永遠回 null）。與下面 DisposableMap.remove(id) 只清自己 id 的語意一致。
+        if (project.getUserData(WindowFactory.NAVIGATOR_PANEL_KEY) == this) {
+            project.putUserData(WindowFactory.NAVIGATOR_PANEL_KEY, null);
+        }
         NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.remove(id);
     }
 

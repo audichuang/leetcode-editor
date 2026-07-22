@@ -11,7 +11,6 @@ import com.shuzijun.leetcode.plugin.model.Constant;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.model.Sort;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import icons.LeetCodeEditorIcons;
 import org.jetbrains.annotations.NotNull;
 
@@ -44,7 +43,7 @@ public class SortAction extends AbstractAction implements DumbAware {
 
     @Override
     public void actionPerformed(AnActionEvent anActionEvent, Config config) {
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return;
         }

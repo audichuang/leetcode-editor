@@ -184,11 +184,6 @@ public class TopNavigatorPanel extends SimpleToolWindowPanel implements Navigato
         };
     }
 
-    @Override
-    public Object getData(String dataId) {
-        return super.getData(dataId);
-    }
-
     private void initFind() {
         Find cnFind = new Find();
         cnFind.addSort(Constant.CODETOP_SORT_TYPE_TITLE, new Sort(Constant.CODETOP_SORT_TYPE_TITLE, "leetcode"));

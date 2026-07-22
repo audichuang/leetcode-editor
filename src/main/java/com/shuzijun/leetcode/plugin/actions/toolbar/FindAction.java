@@ -50,9 +50,10 @@ public class FindAction extends ToggleAction implements DumbAware {
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
         // EDT required: isSelected() reads Swing's panel.isVisible(), which is not
-        // safe to call off the EDT. This action does not read NavigatorAction from
-        // WindowFactory.getDataContext() directly anymore either way (see above),
-        // but the Swing read is the reason this must stay/become EDT.
+        // safe to call off the EDT. This action does not read NavigatorAction via
+        // WindowFactory's old (since-removed) direct-lookup helper either way — it uses
+        // AnActionEvent#getData() (see above) — but the Swing read is the reason this
+        // must stay/become EDT.
         return ActionUpdateThread.EDT;
     }
 }

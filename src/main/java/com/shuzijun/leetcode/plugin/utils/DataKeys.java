@@ -18,7 +18,7 @@ public class DataKeys {
     public static final DataKey<NavigatorAction> LEETCODE_PROJECTS_NAVIGATORACTION = DataKey.create("LEETCODE_PROJECTS_NAVIGATORACTION");
 
     // Selected row's QuestionView, read off the current navigator tab's JTable. Only ever
-    // populated by NavigatorTabsPanel#getData() on EDT (platform's PreCachedDataContext
+    // populated by NavigatorTabsPanel#uiDataSnapshot(DataSink) on EDT (platform's DataContext
     // snapshot) — never read Swing selection directly from a BGT action/group.
     public static final DataKey<QuestionView> LEETCODE_PROJECTS_SELECTED_QUESTION = DataKey.create("LEETCODE_PROJECTS_SELECTED_QUESTION");
 }

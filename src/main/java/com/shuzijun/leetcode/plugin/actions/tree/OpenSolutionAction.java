@@ -8,11 +8,9 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.shuzijun.leetcode.plugin.manager.ArticleManager;
-import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.*;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import com.shuzijun.leetcode.plugin.window.dialog.SolutionPanel;
 import org.jetbrains.annotations.NotNull;
 
@@ -29,12 +27,13 @@ public class OpenSolutionAction extends AbstractTreeAction {
 
     @Override
     public void update(@NotNull AnActionEvent anActionEvent) {
-        NavigatorAction<QuestionView> navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
-        if (navigatorAction == null) {
-            anActionEvent.getPresentation().setEnabled(false);
-            return;
-        }
-        QuestionView questionView = navigatorAction.getSelectedRowData();
+        // BGT-safe: this runs on ActionUpdateThread.BGT (inherited from AbstractAction);
+        // read the LEETCODE_PROJECTS_SELECTED_QUESTION snapshot key instead of pulling the
+        // live NavigatorAction and calling getSelectedRowData() (which hits JTable.getSelectedRow()
+        // on whatever thread calls it). NavigatorTabsPanel#uiDataSnapshot() already resolves that
+        // key on EDT while the platform snapshots the DataContext — see FindActionGroup.java:116-132
+        // for why e.getData() is BGT-safe, and FavoriteActionGroup.java:41 for the same pattern.
+        QuestionView questionView = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_SELECTED_QUESTION);
         if (questionView == null) {
             anActionEvent.getPresentation().setEnabled(false);
             return;

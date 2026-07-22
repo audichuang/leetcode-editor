@@ -25,11 +25,12 @@ public class FavoriteActionGroup extends ActionGroup implements DumbAware {
     @Override
     public AnAction[] getChildren(AnActionEvent anActionEvent) {
         // BGT-safe: read via the event's (async, EDT-snapshotted) DataContext instead of
-        // WindowFactory.getDataContext(), which walks ToolWindowManager/ContentManager/Swing
-        // directly and asserts EDT. Same fix as FindActionGroup. The selected row's
-        // QuestionView additionally requires a JTable read (getSelectedRowData()), which must
-        // not happen on BGT either — NavigatorTabsPanel#getData() resolves it on EDT during
-        // the platform's snapshot; see LEETCODE_PROJECTS_SELECTED_QUESTION.
+        // walking ToolWindowManager/ContentManager/Swing directly (WindowFactory's old
+        // direct-lookup helper, since removed), which asserted EDT. Same fix as
+        // FindActionGroup. The selected row's QuestionView additionally requires a JTable
+        // read (getSelectedRowData()), which must not happen on BGT either —
+        // NavigatorTabsPanel#uiDataSnapshot() resolves it on EDT during the platform's
+        // snapshot; see LEETCODE_PROJECTS_SELECTED_QUESTION.
         if (anActionEvent == null) {
             return AnAction.EMPTY_ARRAY;
         }

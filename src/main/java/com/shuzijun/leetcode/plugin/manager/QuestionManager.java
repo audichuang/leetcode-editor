@@ -55,7 +55,7 @@ public class QuestionManager {
 
     public static PageInfo<QuestionView> getQuestionViewList(Project project, PageInfo<QuestionView> pageInfo) {
         boolean isPremium = false;
-        User user = WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser();
+        User user = WindowFactory.getUser(project);
         if (user != null) {
             isPremium = user.isPremium();
         }
@@ -92,12 +92,17 @@ public class QuestionManager {
     }
 
     public static List<QuestionView> getQuestionAllService(Project project, boolean reset) {
-        Boolean isPremium = false;
-        User user = WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser();
-        if (user != null) {
-            isPremium = user.isPremium();
+        User user = WindowFactory.getUser(project);
+        if (user == null) {
+            // WindowFactory.getUser 契約：null = panel unavailable（身分未知，非登出）。此時發請求會
+            // 用 isPremium=false 把付費題誤標成 lock，寫進 static questionAllCache 這個「只以 host 分區」
+            // 的快取，污染同 host 下一個 project 的顯示（直到 Refresh 或 2 天 TTL）。身分未知時只回既有
+            // 快取，不發請求、不寫入。
+            AllHolder holder = questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
+            return holder == null ? null : holder.list;
         }
-        String username = (user == null) ? null : user.getUsername();
+        boolean isPremium = user.isPremium();
+        String username = user.getUsername();
         // 快照世代；寫回前若世代已變（帳號切換觸發了 invalidateAll），放棄寫回避免覆蓋新帳號的快取
         int gen = generation;
         if (questionAllCache.getIfPresent(URLUtils.getLeetcodeHost()) == null || reset) {

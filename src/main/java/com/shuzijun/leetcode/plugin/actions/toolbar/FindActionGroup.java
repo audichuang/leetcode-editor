@@ -27,8 +27,9 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
     @Override
     public void update(AnActionEvent e) {
         // BGT-safe: read NavigatorAction off the event's (async, EDT-snapshotted)
-        // DataContext instead of WindowFactory.getDataContext(), which walks
-        // ToolWindowManager/ContentManager/Swing directly and asserts EDT.
+        // DataContext instead of walking ToolWindowManager/ContentManager/Swing
+        // directly (WindowFactory's old direct-lookup helper, since removed), which
+        // asserted EDT.
         if (e == null) {
             return;
         }
@@ -58,7 +59,8 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
         // ponytail: platform may still probe groups via the legacy getChildren(null) path
         // (pre-update-session code); degrade to no children instead of NPE-ing.
         // Same BGT-safety note as update() above: read via the event's DataContext,
-        // never via WindowFactory.getDataContext().
+        // never via direct ToolWindowManager/ContentManager/Swing traversal (WindowFactory's
+        // old direct-lookup helper, since removed).
         if (anActionEvent == null) {
             return AnAction.EMPTY_ARRAY;
         }
@@ -124,10 +126,12 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
         // and calling every DataProvider.getData() ONCE on EDT before the async update
         // session ever reaches BGT (see PreCachedDataContext's constructor-time
         // assertEventDispatchThread() + MySink.uiDataSnapshot(DataProvider), which calls
-        // provider.getData(key) for every registered DataKey up front). NavigatorTabsPanel
-        // is a plain DataProvider (via SimpleToolWindowPanel), so its getData() runs on
-        // EDT during that snapshot, and update()/getChildren() on BGT only ever read the
-        // already-resolved value — never Swing/ToolWindow state directly.
+        // provider.getData(key) for every registered DataKey up front for legacy
+        // DataProviders). NavigatorTabsPanel implements uiDataSnapshot(DataSink) directly
+        // (via SimpleToolWindowPanel's UiCompatibleDataProvider support), so it populates
+        // NavigatorAction/the selected question on EDT during that snapshot, and
+        // update()/getChildren() on BGT only ever read the already-resolved value — never
+        // Swing/ToolWindow state directly.
         return ActionUpdateThread.BGT;
     }
 }

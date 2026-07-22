@@ -111,7 +111,10 @@ public class HttpLogin {
             @Override
             public void run() {
                 try {
-                    User user = WindowFactory.getDataContext(project).getData(DataKeys.LEETCODE_PROJECTS_TABS).getUser();
+                    User user = WindowFactory.getUser(project);
+                    if (user == null) {
+                        return;
+                    }
                     if (user.isVerified() || user.isPhoneVerified()) {
                         return;
                     }

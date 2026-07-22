@@ -17,7 +17,6 @@ import com.shuzijun.leetcode.plugin.utils.HttpRequestUtils;
 import com.shuzijun.leetcode.plugin.utils.MessageUtils;
 import com.shuzijun.leetcode.plugin.utils.PropertiesUtils;
 import com.shuzijun.leetcode.plugin.window.ProgressPanel;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
@@ -57,7 +56,10 @@ public class ProgressAction extends AbstractAction implements DumbAware {
                     // 切換 session 後題目狀態/進度全變，舊的 HTTP 與題庫快取必須作廢
                     HttpRequestUtils.invalidateCache();
                     QuestionManager.invalidateAll();
-                    NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+                    NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+                    if (navigatorAction == null) {
+                        return;
+                    }
                     navigatorAction.getFind().operationType("");
                     navigatorAction.findClear();
                     StatisticsData.refresh(anActionEvent.getProject());

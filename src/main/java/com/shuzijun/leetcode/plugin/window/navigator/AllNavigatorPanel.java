@@ -253,11 +253,6 @@ public class AllNavigatorPanel extends SimpleToolWindowPanel implements Navigato
     }
 
     @Override
-    public Object getData(String dataId) {
-        return super.getData(dataId);
-    }
-
-    @Override
     public void dispose() {
         navigatorTable.dispose();
     }

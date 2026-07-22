@@ -13,8 +13,9 @@ group = providers.gradleProperty("pluginGroup").get()
 version = System.getenv("LD_VERSION") ?: providers.gradleProperty("pluginVersion").get()
 
 // Set the JVM language level used to build the project.
+// 2026.2 platform jar 是 Java 25 bytecode，JDK 21 javac 讀不動。
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 // Configure project's dependencies
@@ -52,6 +53,9 @@ dependencies {
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
         create(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+        // 2026.x JCEF 拆成獨立 bundled plugin，<depends> 只解 runtime、不解 compile classpath，
+        // 沒有這行 compileJava 就找不到 com.intellij.ui.jcef.* 的 symbol。
+        bundledPlugin("com.intellij.modules.jcef")
 
         // Plugin Dependencies. Uses `platformBundledPlugins` property from the gradle.properties file for bundled IntelliJ Platform plugins.
         //bundledPlugins(providers.gradleProperty("platformBundledPlugins").map { it.split(',') })
@@ -108,9 +112,10 @@ intellijPlatform {
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
         )
         ides {
-            recommended()
-            // 明確驗證使用者實際使用的 2026.2：抓「用了平台 class 卻沒宣告 module/plugin 依賴」這類
-            // 編譯與單元測試都抓不到、只有真實 IDE 啟動才會爆的相容性問題（如 JCEF 拆成 bundled plugin）
+            // 只留 explicit pin，不加 recommended()：sinceBuild=262 之後兩者已撞同一顆 build
+            // （實測 verifyPlugin 只跑「1 of 1 verifications」，recommended() 沒有增加額外覆蓋）。
+            // recommended() 是動態的——sinceBuild 之後若再往前推、或 plugin 版號更新，它會悄悄
+            // 不再測 2026.2 這個「使用者實際平台」底線；explicit pin 才是固定錨點，別改回 recommended()。
             create("IU", "2026.2")
         }
     }
