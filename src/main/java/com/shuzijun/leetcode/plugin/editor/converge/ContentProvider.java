@@ -1,5 +1,6 @@
 package com.shuzijun.leetcode.plugin.editor.converge;
 
+import com.intellij.openapi.fileEditor.AsyncFileEditorProvider;
 import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
@@ -14,11 +15,35 @@ import java.nio.file.Path;
 /**
  * @author shuzijun
  */
-public class ContentProvider extends LCVProvider {
+public class ContentProvider extends LCVProvider implements AsyncFileEditorProvider {
 
     @Override
     public boolean accept(@NotNull Project project, @NotNull VirtualFile file) {
         return true;
+    }
+
+    @Override
+    public @NotNull Builder createEditorAsync(@NotNull Project project, @NotNull VirtualFile file) {
+        // 262 的 async 開檔 bridge 是 readAction { createEditorAsync(...) } → Dispatchers.EDT
+        // { build() }(AsyncFileEditorProvider.createFileEditor$suspendImpl bytecode 驗證)。
+        // 所以這裡(prep 階段、BGT、read action 內)只能做純查找:同步 VFS refresh 要等 EDT
+        // 以 write action 套事件,在 read action 裡呼叫就是死鎖,絕不能搬進來。
+        LeetcodeEditor leetcodeEditor = ProjectConfig.getInstance(project).getEditor(file.getPath());
+        VirtualFile prepared = LocalFileSystem.getInstance()
+                .findFileByNioFile(Path.of(leetcodeEditor.getContentPath()));
+        return new Builder() {
+            @Override
+            public FileEditor build() {
+                if (prepared != null) {
+                    // 熱路徑與正常 tab 還原:prep 已解析,EDT 上零 VFS 工作。
+                    return buildForContent(project, prepared);
+                }
+                // 罕見:VFS 持久快照遺失 content 檔。這裡在 EDT 且無 read action,同步
+                // refresh 合法(慢碟會卡 UI,但「必須同步生出 editor」的約束下這是最後
+                // 手段;不能上移的理由見 createEditorAsync 開頭)。
+                return createEditor(project, file);
+            }
+        };
     }
 
     @Override
@@ -33,11 +58,11 @@ public class ContentProvider extends LCVProvider {
         if (contentVf == null) {
             // fallback:罕見情況(例如重開 IDE 還原 editor tab 時 VFS 持久快照遺失該檔)。
             // 直接在呼叫緒同步 refresh——262 的 refreshAndFindFileByNioFile 未標 background-only,
-            // 平台允許同步呼叫。原本包一層 executeOnPooledThread(...).get() 並不會避開阻塞:
-            // 呼叫緒仍卡在 .get() 等 pooled thread 做完 VFS refresh,而 refresh 派發的事件可能
-            // 又回派 EDT 處理,若呼叫緒本身就是 EDT 就是死鎖窗口,反而比直接同步呼叫更危險。
-            // 不改走 AsyncFileEditorProvider:ConvergeProvider 已控 async 建構,為了這條罕見
-            // fallback 動開題熱路徑不成比例。
+            // 平台允許同步呼叫(前提:不能持有 read action;async 路徑由 createEditorAsync 的
+            // prep 純查找承擔,只有查不到才會落到這裡的 EDT/同步呼叫端)。原本包一層
+            // executeOnPooledThread(...).get() 並不會避開阻塞:呼叫緒仍卡在 .get() 等 pooled
+            // thread 做完 VFS refresh,而 refresh 派發的事件可能又回派 EDT 處理,若呼叫緒本身
+            // 就是 EDT 就是死鎖窗口,反而比直接同步呼叫更危險。
             contentVf = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(contentFile);
         }
         if (contentVf == null) {
@@ -46,6 +71,11 @@ public class ContentProvider extends LCVProvider {
             // 靜默餵 null 會在稍後 editor 建立時以難懂的方式失敗——這裡先帶路徑 fail-fast。
             throw new IllegalStateException("LeetCode content file missing or not refreshable: " + contentFile);
         }
+        return buildForContent(project, contentVf);
+    }
+
+    /** 對「已解析好的 content 檔」建 editor:走 LCVProvider 的建構,跳過本類的 content 解析。 */
+    private FileEditor buildForContent(@NotNull Project project, @NotNull VirtualFile contentVf) {
         return super.createEditor(project, contentVf);
     }
 }

@@ -51,7 +51,7 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
     private String id = UUID.randomUUID().toString();
 
-    // held only to clear WindowFactory.NAVIGATOR_PANEL_KEY in dispose(); never used for Swing/UI work.
+    // used by start() background init/subscriptions; never used for Swing/UI work off-EDT.
     private final Project project;
 
     private SimpleToolWindowPanel[] navigatorPanels;
@@ -115,6 +115,23 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
         setContent(tabs.getComponent());
 
+        for (SimpleToolWindowPanel n : navigatorPanels) {
+            if (n instanceof Disposable) {
+                Disposer.register(this, (Disposable) n);
+            }
+        }
+
+        NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.put(id, this);
+
+    }
+
+    /**
+     * 背景初始化(登入狀態/統計)與事件訂閱。由 WindowFactory 在 registry
+     * putUserData 完成、content 掛好之後呼叫——不能放建構子:pooled task 會經
+     * SessionManager 讀 WindowFactory registry,建構子階段還沒註冊,拿到 null 會
+     * 跳過 CN userSessionProgress 精修、把粗略統計寫進持久狀態。
+     */
+    void start() {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             User user = getUser();
             if (user.isSignedIn()) {
@@ -158,15 +175,6 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
             }
         });
         messageBusConnection.subscribe(QuestionStatusNotifier.QUESTION_STATUS_TOPIC, (QuestionStatusNotifier) question -> StatisticsData.refresh(project));
-
-        for (SimpleToolWindowPanel n : navigatorPanels) {
-            if (n instanceof Disposable) {
-                Disposer.register(this, (Disposable) n);
-            }
-        }
-
-        NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.put(id, this);
-
     }
 
     public void toggle() {
@@ -238,12 +246,10 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
     public void dispose() {
         // 子面板已在建構子用 Disposer.register(this, ...) 接管，平台 Disposer 會先銷毀子節點再回呼這裡；
         // 別再手動逐一 dispose，否則雙重 disposal。
-        // compare-and-clear：只清「還是自己」的註冊，避免萬一平台先建立/註冊了新 panel、才 dispose 舊
-        // panel 時，把存活 panel 的註冊給抹掉（否則 WindowFactory.getUser/getNavigatorAction 對該
-        // project 會永遠回 null）。與下面 DisposableMap.remove(id) 只清自己 id 的語意一致。
-        if (project.getUserData(WindowFactory.NAVIGATOR_PANEL_KEY) == this) {
-            project.putUserData(WindowFactory.NAVIGATOR_PANEL_KEY, null);
-        }
+        // WindowFactory registry 的清除不在這裡：WindowFactory 在 putUserData 後另外
+        // Disposer.register 了一個 compare-and-clear 子節點（LIFO，比建構子註冊的所有
+        // 子面板先跑），BGT 在 disposal 期間查 registry 會先於任何 UI 拆除就拿到 null——
+        // 若等到這個父回呼才清，會留下「子面板拆到一半、registry 還回傳本 panel」的窗口。
         NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.remove(id);
     }
 
