@@ -7,7 +7,16 @@
 [![捐赠][badge:donate-zh]][shuzijun-donate]
 [![内推][badge:referrals]][shuzijun-referrals]
 
-## 8.17.0
+## 8.18.0
+
+### Changed
+- Build target upgraded to IntelliJ 2026.2 (sinceBuild 262, JDK 25 toolchain, Kotlin 2.4.10 with platform-provided stdlib, IntelliJ Platform Gradle Plugin 2.18.1)
+- Deprecated/scheduled-for-removal API cleanup: verifyPlugin records down from 23/16 (SFR/deprecated) to 2/1 — uiDataSnapshot(DataSink) migration for the navigator panels, AnActionEvent#getData() for all single-context actions, CredentialAttributes/deleteCookies non-deprecated overloads
+- Proxy stack migrated from HttpConfigurable to ProxySettings/JdkProxyProvider (per-challenge credential lookup, live proxy selector)
+- Editor open/restore: content-file VFS resolution moved off the EDT into the async preparation phase; EDT synchronous refresh remains only as a rare last resort
+
+### Fixed
+- Navigator panel registry races on project open/close (init task ordering, LIFO registry clear before child teardown)
 
 ### Changed
 - Performance: fix memory leaks (timer status-bar widget, note preview editor, JVM-global cookie store), cache GraphQL query resources, join solution-list pages to the HTTP cache, stop blocking the EDT for editor tab titles, drop unused jlatexmath dependency
