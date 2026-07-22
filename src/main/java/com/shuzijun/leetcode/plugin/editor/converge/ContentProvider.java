@@ -11,6 +11,7 @@ import com.shuzijun.leetcode.plugin.setting.ProjectConfig;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * @author shuzijun
@@ -29,18 +30,29 @@ public class ContentProvider extends LCVProvider implements AsyncFileEditorProvi
         // 所以這裡(prep 階段、BGT、read action 內)只能做純查找:同步 VFS refresh 要等 EDT
         // 以 write action 套事件,在 read action 裡呼叫就是死鎖,絕不能搬進來。
         LeetcodeEditor leetcodeEditor = ProjectConfig.getInstance(project).getEditor(file.getPath());
-        VirtualFile prepared = LocalFileSystem.getInstance()
-                .findFileByNioFile(Path.of(leetcodeEditor.getContentPath()));
+        Path contentFile = Path.of(leetcodeEditor.getContentPath());
+        VirtualFile prepared = LocalFileSystem.getInstance().findFileByNioFile(contentFile);
+        if (prepared == null) {
+            // VFS 快照遺失 content 檔:這裡不能同步 refresh(read action 內),改排非阻塞
+            // async refresh 讓 refresh worker 先跑;到 build() 時多半已補進 VFS,可免掉
+            // EDT 上的同步 refresh 最後手段。
+            LocalFileSystem.getInstance().refreshNioFiles(List.of(contentFile), true, false, null);
+        }
         return new Builder() {
             @Override
             public FileEditor build() {
-                if (prepared != null) {
-                    // 熱路徑與正常 tab 還原:prep 已解析,EDT 上零 VFS 工作。
-                    return buildForContent(project, prepared);
+                // prep 命中且仍有效 → EDT 零 VFS 工作;prep miss 或期間被刪/替換
+                // (isValid=false)→ 再做一次純查找(上面的 async refresh 或替換產生的
+                // VFS 事件多半已補上新節點,查找不碰磁碟)。
+                VirtualFile contentVf = (prepared != null && prepared.isValid())
+                        ? prepared
+                        : LocalFileSystem.getInstance().findFileByNioFile(contentFile);
+                if (contentVf != null && contentVf.isValid()) {
+                    return buildForContent(project, contentVf);
                 }
-                // 罕見:VFS 持久快照遺失 content 檔。這裡在 EDT 且無 read action,同步
-                // refresh 合法(慢碟會卡 UI,但「必須同步生出 editor」的約束下這是最後
-                // 手段;不能上移的理由見 createEditorAsync 開頭)。
+                // 最後手段:EDT、無 read action,同步 refresh 合法(慢碟會卡 UI,但
+                // legacy Builder API 在 miss 時沒有可暫停的 BGT 階段;不能上移的理由
+                // 見 createEditorAsync 開頭)。走 createEditor 的完整 fallback 含 fail-fast。
                 return createEditor(project, file);
             }
         };

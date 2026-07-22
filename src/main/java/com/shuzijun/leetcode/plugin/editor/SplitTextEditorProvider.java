@@ -125,12 +125,11 @@ public abstract class SplitTextEditorProvider implements AsyncFileEditorProvider
     public static Builder getBuilderFromEditorProvider(@NotNull final FileEditorProvider provider,
                                                        @NotNull final Project project,
                                                        @NotNull final VirtualFile file) {
-            return new Builder() {
-                @Override
-                public FileEditor build() {
-                    return provider.createEditor(project, file);
-                }
-            };
-
+        // 委派 ConvergeProvider 的 async-aware helper:async 子 provider(ConvergeProvider →
+        // ContentProvider 等)的 preparation 必須在這裡(bridge 的 readAction/BGT 階段)就
+        // 展開;原本一律包成 build() 時才 createEditor,整條子鏈被推遲到 EDT 才跑,子 provider
+        // 的 async prep 形同虛設。共用同一個 helper 也讓 override-only 的 createEditorAsync
+        // 呼叫點維持一處(verifyPlugin 記錄不增加)。
+        return ConvergeProvider.getBuilderFromEditorProvider(provider, project, file);
     }
 }
