@@ -26,6 +26,7 @@ public class ConsoleWindowFactory implements ToolWindowFactory, DumbAware {
 
         ConsolePanel consolePanel = new ConsolePanel(toolWindow, project);
         Content content = toolWindow.getContentManager().getFactory().createContent(consolePanel, "", true);
+        content.setDisposer(consolePanel.getConsoleView());
         toolWindow.getContentManager().addContent(content);
         if (PersistentConfig.getInstance().getInitConfig() != null && !PersistentConfig.getInstance().getInitConfig().getShowToolIcon()) {
             toolWindow.setIcon(LeetCodeEditorIcons.EMPEROR_NEW_CLOTHES);

@@ -6,7 +6,6 @@ import com.intellij.openapi.actionSystem.ToggleAction;
 import com.intellij.openapi.project.DumbAware;
 import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
 import com.shuzijun.leetcode.plugin.utils.DataKeys;
-import com.shuzijun.leetcode.plugin.window.WindowFactory;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -24,7 +23,7 @@ public class FindAction extends ToggleAction implements DumbAware {
             //Why is it null?
             return false;
         }
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return false;
         }
@@ -37,7 +36,7 @@ public class FindAction extends ToggleAction implements DumbAware {
 
     @Override
     public void setSelected(AnActionEvent anActionEvent, boolean b) {
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(anActionEvent.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        NavigatorAction navigatorAction = anActionEvent.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return;
         }
@@ -50,6 +49,10 @@ public class FindAction extends ToggleAction implements DumbAware {
 
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        return  ActionUpdateThread.BGT;
+        // EDT required: isSelected() reads Swing's panel.isVisible(), which is not
+        // safe to call off the EDT. This action does not read NavigatorAction from
+        // WindowFactory.getDataContext() directly anymore either way (see above),
+        // but the Swing read is the reason this must stay/become EDT.
+        return ActionUpdateThread.EDT;
     }
 }

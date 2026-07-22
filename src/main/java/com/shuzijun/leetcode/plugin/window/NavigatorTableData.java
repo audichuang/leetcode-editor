@@ -11,6 +11,7 @@ import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.util.ui.JBUI;
 import com.shuzijun.leetcode.plugin.listener.ConfigNotifier;
 import com.shuzijun.leetcode.plugin.listener.QuestionStatusNotifier;
 import com.shuzijun.leetcode.plugin.model.Config;
@@ -62,6 +63,8 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         this.project = project;
         this.myTableModel = createMyTableModel();
         this.myTable = createMyTable(myTableModel, project);
+        this.myTable.setStriped(true);
+        this.myTable.getEmptyText().setText("No matching questions");
         this.myPageInfo = createMyPageInfo();
         this.myPagePanel = createMyPagePanel(myPageInfo, project);
         this.firstToolTip = firstToolTip();
@@ -333,11 +336,19 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         public PagePanel(Project project, PageInfo pageInfo) {
             super(new BorderLayout());
             pageSizeBox = new JComboBox(pageSizeData());
-            pageSizeBox.setPreferredSize(new Dimension(60, -1));
+            pageSizeBox.setPreferredSize(JBUI.size(60, -1));
             pageSizeBox.setSelectedItem(pageInfo.getPageSize());
             pageSizeBox.addItemListener(e -> {
                 if (e.getStateChange() == ItemEvent.SELECTED) {
                     pageInfo.setPageSize((Integer) e.getItem());
+                    if (page.getItemCount() > 0) {
+                        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Go to", false) {
+                            @Override
+                            public void run(@NotNull ProgressIndicator progressIndicator) {
+                                goRunnable();
+                            }
+                        });
+                    }
                 }
             });
             add(pageSizeBox, BorderLayout.WEST);
@@ -345,8 +356,8 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
             JPanel control = new JPanel(new BorderLayout());
             previous = new JButton("<");
             previous.setToolTipText("Previous");
-            previous.setPreferredSize(new Dimension(50, -1));
-            previous.setMaximumSize(new Dimension(50, -1));
+            previous.setPreferredSize(JBUI.size(50, -1));
+            previous.setMaximumSize(JBUI.size(50, -1));
             previous.addActionListener(event -> {
                 if (page.getItemCount() <= 0 || (int) page.getSelectedItem() < 2) {
                 } else {
@@ -363,8 +374,8 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
             control.add(previous, BorderLayout.WEST);
             next = new JButton(">");
             next.setToolTipText("Next");
-            next.setPreferredSize(new Dimension(50, -1));
-            next.setMaximumSize(new Dimension(50, -1));
+            next.setPreferredSize(JBUI.size(50, -1));
+            next.setMaximumSize(JBUI.size(50, -1));
             next.addActionListener(event -> {
                 if (page.getItemCount() <= 0 || (int) page.getSelectedItem() >= page.getItemCount()) {
                     return;
@@ -385,8 +396,8 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
             add(control, BorderLayout.CENTER);
 
             go = new JButton("Go");
-            go.setPreferredSize(new Dimension(50, -1));
-            go.setMaximumSize(new Dimension(50, -1));
+            go.setPreferredSize(JBUI.size(50, -1));
+            go.setMaximumSize(JBUI.size(50, -1));
             go.addActionListener(event -> {
                 if (page.getItemCount() <= 0) {
                     return;

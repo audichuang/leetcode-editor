@@ -16,7 +16,6 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.ui.components.JBPasswordField;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.util.net.HttpConfigurable;
 import com.shuzijun.leetcode.plugin.listener.ColorListener;
 import com.shuzijun.leetcode.plugin.listener.ConfigNotifier;
 import com.shuzijun.leetcode.plugin.listener.DonateListener;
@@ -93,14 +92,10 @@ public class SettingUI {
         });
 
         customCodeBox.addActionListener(new DonateListener(customCodeBox));
-        proxyCheckBox.setSelected(HttpConfigurable.getInstance().USE_HTTP_PROXY || HttpConfigurable.getInstance().USE_PROXY_PAC);
-        proxyCheckBox.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (HttpConfigurable.editConfigurable(mainPanel)) {
-                    proxyCheckBox.setSelected(HttpConfigurable.getInstance().USE_HTTP_PROXY || HttpConfigurable.getInstance().USE_PROXY_PAC);
-                }
-            }
+        proxyCheckBox.setSelected(!(com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration() instanceof com.intellij.util.net.ProxyConfiguration.DirectProxy));
+        proxyCheckBox.addActionListener(e -> {
+            com.intellij.openapi.options.ShowSettingsUtil.getInstance().editConfigurable(mainPanel, new com.intellij.util.net.HttpProxyConfigurable());
+            proxyCheckBox.setSelected(!(com.intellij.util.net.ProxySettings.getInstance().getProxyConfiguration() instanceof com.intellij.util.net.ProxyConfiguration.DirectProxy));
         });
 
         templateConfigHelp.addMouseListener(new MouseAdapter() {
@@ -237,7 +232,7 @@ public class SettingUI {
             Config currentState = new Config();
             process(currentState);
             if (currentState.isModified(config)) {
-                if (passwordField.getText() != null && passwordField.getText().equals(PersistentConfig.getInstance().getPassword(config.getLoginName()))) {
+                if (new String(passwordField.getPassword()).equals(PersistentConfig.getInstance().getPassword(config.getLoginName()))) {
                     return false;
                 } else {
                     return true;
@@ -263,7 +258,7 @@ public class SettingUI {
             file.mkdirs();
         }
         PersistentConfig.getInstance().setInitConfig(config);
-        PersistentConfig.getInstance().savePassword(passwordField.getText(), config.getLoginName());
+        PersistentConfig.getInstance().savePassword(new String(passwordField.getPassword()), config.getLoginName());
         Config finalOldConfig = oldConfig;
         Config finalConfig = config;
         ProgressManager.getInstance().run(new Task.Backgroundable(null, PluginConstant.PLUGIN_NAME + " Apply Config", false) {

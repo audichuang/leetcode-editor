@@ -25,11 +25,6 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
     private int i = 0;
 
     @Override
-    public boolean displayTextInToolbar() {
-        return true;
-    }
-
-    @Override
     public void update(AnActionEvent e) {
         // BGT-safe: read NavigatorAction off the event's (async, EDT-snapshotted)
         // DataContext instead of WindowFactory.getDataContext(), which walks
@@ -37,6 +32,7 @@ public class FindActionGroup extends ActionGroup implements DumbAware {
         if (e == null) {
             return;
         }
+        e.getPresentation().putClientProperty(com.intellij.openapi.actionSystem.ex.ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
         NavigatorAction navigatorAction = e.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
         if (navigatorAction == null) {
             return;

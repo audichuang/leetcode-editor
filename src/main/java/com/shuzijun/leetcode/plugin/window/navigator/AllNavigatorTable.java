@@ -44,7 +44,27 @@ public class AllNavigatorTable extends NavigatorTableData<QuestionView> {
 
     @Override
     protected PagePanel createMyPagePanel(PageInfo<QuestionView> myPageInfo, Project project) {
-        return null;
+        return new PagePanel(project, myPageInfo) {
+            @Override
+            public Integer[] pageSizeData() {
+                return new Integer[]{50, 100, 200};
+            }
+
+            @Override
+            public void previousRunnable() {
+                myNavigatorAction.loadServiceData();
+            }
+
+            @Override
+            public void nextRunnable() {
+                myNavigatorAction.loadServiceData();
+            }
+
+            @Override
+            public void goRunnable() {
+                myNavigatorAction.loadServiceData();
+            }
+        };
     }
 
     @Override

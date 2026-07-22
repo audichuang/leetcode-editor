@@ -21,13 +21,12 @@ import org.jetbrains.annotations.NotNull;
 public class SortAction extends AbstractAction implements DumbAware {
 
     @Override
-    public boolean displayTextInToolbar() {
-        return true;
-    }
-
-    @Override
     public void update(@NotNull AnActionEvent e) {
-        NavigatorAction navigatorAction = WindowFactory.getDataContext(e.getProject()).getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        e.getPresentation().putClientProperty(com.intellij.openapi.actionSystem.ex.ActionUtil.SHOW_TEXT_IN_TOOLBAR, true);
+        NavigatorAction navigatorAction = e.getData(DataKeys.LEETCODE_PROJECTS_NAVIGATORACTION);
+        if (navigatorAction == null) {
+            return;
+        }
         Sort sort = getSort(e, navigatorAction);
         if (sort == null) {
             return;

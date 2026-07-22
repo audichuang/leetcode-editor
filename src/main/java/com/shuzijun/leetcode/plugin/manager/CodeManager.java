@@ -225,7 +225,7 @@ public class CodeManager {
 
                                     MessageUtils.getInstance(project).showInfoMsg("", PropertiesUtils.getInfo("submit.success", runtime, runtimePercentile, codeTypeEnum.getType(), memory, memoryPercentile, codeTypeEnum.getType()));
                                     question.setStatus("ac");
-                                    ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionStatusNotifier.QUESTION_STATUS_TOPIC).updateTable(question);
+                                    publishStatus(question);
                                 } else {
 
                                     String input = jsonObject.getString("input");
@@ -240,7 +240,7 @@ public class CodeManager {
 
                                     if (!"ac".equals(question.getStatus())) {
                                         question.setStatus("notac");
-                                        ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionStatusNotifier.QUESTION_STATUS_TOPIC).updateTable(question);
+                                        publishStatus(question);
                                     }
                                 }
                             } else {
@@ -252,7 +252,7 @@ public class CodeManager {
                                 MessageUtils.getInstance(project).showInfoMsg("", PropertiesUtils.getInfo("submit.run.failed", MessageUtils.format(buildErrorMsg(jsonObject), "E"), testcase, outputs));
                                 if (!"ac".equals(question.getStatus())) {
                                     question.setStatus("notac");
-                                    ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionStatusNotifier.QUESTION_STATUS_TOPIC).updateTable(question);
+                                    publishStatus(question);
                                 }
                             }
                             ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionSubmitNotifier.TOPIC).submit(URLUtils.getLeetcodeHost(), question.getTitleSlug());
@@ -271,6 +271,13 @@ public class CodeManager {
             ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionSubmitNotifier.TOPIC).submit(URLUtils.getLeetcodeHost(), question.getTitleSlug());
             MessageUtils.getInstance(project).showInfoMsg("", PropertiesUtils.getInfo("response.timeout"));
         }
+    }
+
+    // 分頁化後 questionAllCache 的 canonical 副本不再與可見頁共享實例，提交狀態變更需顯式回寫，
+    // 否則翻頁 re-slice 會顯示舊狀態直到 2 天 TTL 過期；可見列的即時刷新仍靠 QUESTION_STATUS_TOPIC 訂閱
+    private static void publishStatus(Question question) {
+        QuestionManager.updateCachedStatus(question);
+        ApplicationManager.getApplication().getMessageBus().syncPublisher(QuestionStatusNotifier.QUESTION_STATUS_TOPIC).updateTable(question);
     }
 
     private static String buildErrorMsg(JSONObject errorBody) {

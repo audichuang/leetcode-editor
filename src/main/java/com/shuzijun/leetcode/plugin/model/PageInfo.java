@@ -76,6 +76,22 @@ public class PageInfo<T> {
         return (pageIndex - 1) * pageSize;
     }
 
+    /**
+     * All 分頁本地切頁：先把 pageIndex 夾回合法範圍(依賴呼叫端已先 setRowTotal)，
+     * 再切出當頁資料的 copy(而非 subList view，避免呼叫端持有的 all 之後被改動時 aliasing)。
+     */
+    public List<T> slice(List<T> all) {
+        int maxPage = Math.max(1, getPageTotal());
+        if (pageIndex < 1) {
+            pageIndex = 1;
+        } else if (pageIndex > maxPage) {
+            pageIndex = maxPage;
+        }
+        int start = Math.min(getSkip(), all.size());
+        int end = Math.min(start + pageSize, all.size());
+        return new ArrayList<>(all.subList(start, end));
+    }
+
     public String getCategorySlug() {
         return categorySlug;
     }

@@ -2,9 +2,11 @@ package com.shuzijun.leetcode.plugin.window.dialog;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.ui.TableSpeedSearch;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.JBUI;
 import com.shuzijun.leetcode.plugin.model.Solution;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,15 +29,16 @@ public class SolutionPanel extends DialogWrapper {
         super(project, true);
         this.jpanel = new JBPanel(new BorderLayout());
 
-        jpanel.setPreferredSize(new Dimension(600, 400));
+        jpanel.setPreferredSize(JBUI.size(600, 400));
         table = new JBTable(tableModel);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getTableHeader().setReorderingAllowed(false);
         table.setRowSelectionAllowed(true);
         table.setRowSelectionInterval(0, 0);
-        table.getColumnModel().getColumn(0).setPreferredWidth(350);
-        table.getColumnModel().getColumn(1).setPreferredWidth(200);
-        table.getColumnModel().getColumn(2).setPreferredWidth(700);
+        table.getColumnModel().getColumn(0).setPreferredWidth(JBUI.scale(350));
+        table.getColumnModel().getColumn(1).setPreferredWidth(JBUI.scale(200));
+        table.getColumnModel().getColumn(2).setPreferredWidth(JBUI.scale(700));
+        TableSpeedSearch.installOn(table);
         jpanel.add(new JBScrollPane(table, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER), BorderLayout.CENTER);
 
         setModal(true);
@@ -64,6 +67,11 @@ public class SolutionPanel extends DialogWrapper {
     @Override
     protected Action[] createActions() {
         return new Action[]{getCancelAction()};
+    }
+
+    @Override
+    protected String getDimensionServiceKey() {
+        return "leetcode.editor.SolutionPanel";
     }
 
     public int getSelectedRow() {

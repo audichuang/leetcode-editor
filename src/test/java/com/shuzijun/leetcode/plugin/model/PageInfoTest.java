@@ -2,6 +2,10 @@ package com.shuzijun.leetcode.plugin.model;
 
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 /**
@@ -81,5 +85,64 @@ public class PageInfoTest {
         page.setCategorySlug("");
         page.disposeFilters("status", "AC", true);
         assertFalse(page.isNoFilter());
+    }
+
+    @Test
+    public void sliceOfEmptyListReturnsEmpty() {
+        PageInfo<String> page = new PageInfo<>(1, 10);
+        page.setRowTotal(0);
+        assertTrue(page.slice(new ArrayList<>()).isEmpty());
+    }
+
+    @Test
+    public void sliceReturnsAllWhenFewerRowsThanOnePage() {
+        List<String> all = Arrays.asList("a", "b", "c");
+        PageInfo<String> page = new PageInfo<>(1, 10);
+        page.setRowTotal(all.size());
+        assertEquals(Arrays.asList("a", "b", "c"), page.slice(all));
+    }
+
+    @Test
+    public void sliceHandlesExactDivisionBoundary() {
+        List<String> all = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            all.add("q" + i);
+        }
+        PageInfo<String> page = new PageInfo<>(2, 10);
+        page.setRowTotal(all.size());
+        // 20 筆整除成 2 頁，第 2 頁剛好裝滿 10 筆、不多不少
+        List<String> page2 = page.slice(all);
+        assertEquals(10, page2.size());
+        assertEquals("q10", page2.get(0));
+        assertEquals("q19", page2.get(9));
+    }
+
+    @Test
+    public void sliceClampsOutOfRangePageIndexToLastPage() {
+        List<String> all = Arrays.asList("a", "b", "c");
+        // pageIndex 99 遠超總頁數，slice 要夾回最後一頁而不是丟例外
+        PageInfo<String> page = new PageInfo<>(99, 10);
+        page.setRowTotal(all.size());
+        List<String> result = page.slice(all);
+        assertEquals(1, page.getPageIndex());
+        assertEquals(Arrays.asList("a", "b", "c"), result);
+    }
+
+    @Test
+    public void sliceRecalculatesAfterPageSizeChange() {
+        List<String> all = new ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            all.add("q" + i);
+        }
+        PageInfo<String> page = new PageInfo<>(3, 10);
+        page.setRowTotal(all.size());
+        // 每頁 10 筆、第 3 頁只剩 5 筆(20..24)
+        assertEquals(5, page.slice(all).size());
+        // 改成每頁 25 筆後，setPageSize 已把 pageIndex 夾回第 1 頁，slice 要吐出全部 25 筆
+        page.setPageSize(25);
+        List<String> resliced = page.slice(all);
+        assertEquals(25, resliced.size());
+        assertEquals("q0", resliced.get(0));
+        assertEquals("q24", resliced.get(24));
     }
 }

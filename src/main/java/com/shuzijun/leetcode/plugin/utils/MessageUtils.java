@@ -13,7 +13,6 @@ import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.ui.popup.Balloon;
 import com.intellij.openapi.ui.popup.BalloonBuilder;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowManager;
 import com.intellij.ui.JBColor;
@@ -201,8 +200,8 @@ public final class MessageUtils implements Disposable {
 
     @Override
     public void dispose() {
-        if (consoleView != null) {
-            Disposer.dispose(consoleView);
-        }
+        // ConsoleView 生命週期由 ConsoleWindowFactory.createToolWindowContent 的
+        // content.setDisposer(consolePanel.getConsoleView()) 唯一擁有,此處不得再
+        // Disposer.dispose(consoleView),否則專案關閉時雙重 dispose。
     }
 }

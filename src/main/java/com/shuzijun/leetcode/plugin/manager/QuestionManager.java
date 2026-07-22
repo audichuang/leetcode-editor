@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 
@@ -36,6 +37,10 @@ public class QuestionManager {
     private static volatile int generation = 0;
     // DateTimeFormatter 為 immutable/thread-safe，共用一份即可（SimpleDateFormat 非 thread-safe 且每次 new 偏重）
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    // questionOfToday 失敗（非 200 或例外）時記錄時間；分頁化後 All 分頁每次翻頁都會呼叫，沒有 negative cache
+    // 離線/daily endpoint 掛掉時每次翻頁都重打真實網路（10/30/30s timeout），10 分鐘內短路避免重複阻塞
+    private static final Map<String, Long> dayFailAt = new ConcurrentHashMap<>();
+    private static final long DAY_FAIL_TTL_MS = TimeUnit.MINUTES.toMillis(10);
 
     private static final class AllHolder {
         private final List<QuestionView> list;
@@ -145,6 +150,20 @@ public class QuestionManager {
         return holder == null ? null : holder.list;
     }
 
+    // 分頁化後 AllNavigatorTable.myList 只剩當前頁切片，不再是 questionAllCache 的共享 list；
+    // 提交等狀態變更改由呼叫端顯式回寫 canonical 快取的 QuestionView，避免翻頁 re-slice 顯示舊狀態
+    public static void updateCachedStatus(Question question) {
+        AllHolder holder = questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
+        if (holder == null) {
+            return;
+        }
+        Integer index = holder.index.get(question.getTitleSlug());
+        if (index == null || index >= holder.list.size()) {
+            return;
+        }
+        holder.list.get(index).setStatus(question.getStatus());
+    }
+
     public static QuestionIndex getQuestionIndex(String titleSlug) {
         // list 與 index 來自同一個 holder，保證同源，不會出現「新 index + 舊 list」
         AllHolder holder = questionAllCache.getIfPresent(URLUtils.getLeetcodeHost());
@@ -213,11 +232,17 @@ public class QuestionManager {
     }
 
     public static QuestionView questionOfToday() {
-        QuestionView dayQuestion = dayMap.getIfPresent(URLUtils.getLeetcodeHost() + LocalDate.now().format(DAY_FMT));
+        String host = URLUtils.getLeetcodeHost();
+        QuestionView dayQuestion = dayMap.getIfPresent(host + LocalDate.now().format(DAY_FMT));
         if (dayQuestion == null) {
+            Long failAt = dayFailAt.get(host);
+            if (failAt != null && System.currentTimeMillis() - failAt < DAY_FAIL_TTL_MS) {
+                return null;
+            }
             try {
                 HttpResponse response = Graphql.builder().cn(URLUtils.isCn()).operationName("questionOfToday").request();
                 if (response.getStatusCode() != 200) {
+                    dayFailAt.put(host, System.currentTimeMillis());
                     return null;
                 } else {
                     JSONObject dateObject = JSONObject.parseObject(response.getBody()).getJSONObject("data");
@@ -229,10 +254,11 @@ public class QuestionManager {
                     }
                     dayQuestion = parseQuestionView(todayRecordObject.getJSONObject("question"), true);
                     dayQuestion.setStatus("day");
-                    dayMap.put(URLUtils.getLeetcodeHost() + todayRecordObject.getString("date"), dayQuestion);
+                    dayMap.put(host + todayRecordObject.getString("date"), dayQuestion);
+                    dayFailAt.remove(host);
                 }
             } catch (Exception ignore) {
-
+                dayFailAt.put(host, System.currentTimeMillis());
             }
         }
 

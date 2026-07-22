@@ -6,8 +6,9 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.ui.tabs.JBTabs;
+import com.intellij.ui.tabs.JBTabsFactory;
 import com.intellij.ui.tabs.TabInfo;
-import com.intellij.ui.tabs.impl.JBTabsImpl;
 import com.intellij.util.messages.MessageBusConnection;
 import com.shuzijun.leetcode.plugin.listener.ConfigNotifier;
 import com.shuzijun.leetcode.plugin.listener.LoginNotifier;
@@ -50,7 +51,7 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
     private SimpleToolWindowPanel[] navigatorPanels;
     private TabInfo[] tabInfos;
 
-    private JBTabsImpl tabs;
+    private JBTabs tabs;
 
     // volatile: written on EDT (toggle()/constructor), read on BGT via getData()
     // (FindActionGroup/FavoriteActionGroup now run ActionUpdateThread.BGT), so a
@@ -65,8 +66,8 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
         navigatorPanels = new SimpleToolWindowPanel[3];
         tabInfos = new TabInfo[3];
 
-        tabs = new JBTabsImpl(project);
-        tabs.setHideTabs(true);
+        tabs = JBTabsFactory.createTabs(project, this);
+        tabs.getPresentation().setHideTabs(true);
 
         NavigatorPanel navigatorPanel = new NavigatorPanel(toolWindow, project);
         navigatorPanels[0] = navigatorPanel;
@@ -103,7 +104,7 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
             }
         }
 
-        setContent(tabs);
+        setContent(tabs.getComponent());
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             User user = getUser();
@@ -150,7 +151,7 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
         messageBusConnection.subscribe(QuestionStatusNotifier.QUESTION_STATUS_TOPIC, (QuestionStatusNotifier) question -> StatisticsData.refresh(project));
 
         for (SimpleToolWindowPanel n : navigatorPanels) {
-            if (n != null && navigatorPanel instanceof Disposable) {
+            if (n instanceof Disposable) {
                 Disposer.register(this, (Disposable) n);
             }
         }
@@ -230,12 +231,9 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
 
     @Override
     public void dispose() {
+        // 子面板已在建構子用 Disposer.register(this, ...) 接管，平台 Disposer 會先銷毀子節點再回呼這裡；
+        // 別再手動逐一 dispose，否則雙重 disposal。
         NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.remove(id);
-        for (SimpleToolWindowPanel navigatorPanel : navigatorPanels) {
-            if (navigatorPanel != null && navigatorPanel instanceof Disposable) {
-                ((Disposable) navigatorPanel).dispose();
-            }
-        }
     }
 
     public static synchronized void loadUser(boolean login) {

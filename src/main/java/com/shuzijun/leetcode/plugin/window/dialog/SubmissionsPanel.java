@@ -2,9 +2,11 @@ package com.shuzijun.leetcode.plugin.window.dialog;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.ui.TableSpeedSearch;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.ui.JBUI;
 import com.shuzijun.leetcode.plugin.model.Submission;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,18 +32,19 @@ public class SubmissionsPanel extends DialogWrapper {
     public SubmissionsPanel(@Nullable Project project, TableModel tableModel) {
         super(project, true);
         jpanel = new JBPanel(new BorderLayout());
-        jpanel.setMinimumSize(new Dimension(400, 400));
-        jpanel.setPreferredSize(new Dimension(400, 400));
+        jpanel.setMinimumSize(JBUI.size(400, 400));
+        jpanel.setPreferredSize(JBUI.size(400, 400));
         table = new JBTable(tableModel);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getTableHeader().setReorderingAllowed(false);
         table.setRowSelectionAllowed(true);
         table.setRowSelectionInterval(0, 0);
-        table.getColumnModel().getColumn(0).setPreferredWidth(350);
-        table.getColumnModel().getColumn(1).setPreferredWidth(200);
-        table.getColumnModel().getColumn(2).setPreferredWidth(100);
-        table.getColumnModel().getColumn(3).setPreferredWidth(200);
-        table.getColumnModel().getColumn(4).setPreferredWidth(100);
+        table.getColumnModel().getColumn(0).setPreferredWidth(JBUI.scale(350));
+        table.getColumnModel().getColumn(1).setPreferredWidth(JBUI.scale(200));
+        table.getColumnModel().getColumn(2).setPreferredWidth(JBUI.scale(100));
+        table.getColumnModel().getColumn(3).setPreferredWidth(JBUI.scale(200));
+        table.getColumnModel().getColumn(4).setPreferredWidth(JBUI.scale(100));
+        TableSpeedSearch.installOn(table);
         jpanel.add(new JBScrollPane(table, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER),  BorderLayout.CENTER);
 
         setModal(true);
@@ -70,6 +73,11 @@ public class SubmissionsPanel extends DialogWrapper {
     @Override
     protected Action[] createActions() {
         return new Action[]{getCancelAction()};
+    }
+
+    @Override
+    protected String getDimensionServiceKey() {
+        return "leetcode.editor.SubmissionsPanel";
     }
 
     public int getSelectedRow() {

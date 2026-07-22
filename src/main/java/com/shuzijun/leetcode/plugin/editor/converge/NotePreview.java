@@ -73,19 +73,22 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
         isLoad = true;
         int myGen = ++generation;
         NotePreview notePreview = this;
-        JBLabel loadingLabel = new JBLabel("Loading......");
+        JBLabel loadingLabel = new JBLabel("Loading...", new com.intellij.ui.AnimatedIcon.Default(), SwingConstants.LEFT);
         ApplicationManager.getApplication().invokeLater(() -> myComponent.addToCenter(loadingLabel));
         // 網路請求在背景執行緒完成，EDT 只負責組裝 UI
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 File fetchedFile = NoteManager.show(leetcodeEditor.getTitleSlug(), project, false);
+                // VFS refresh 就地在 BGT 做完，EDT 只組裝 UI，避免慢磁碟/網路掛載凍住 EDT
+                VirtualFile fetchedVf = (fetchedFile != null && fetchedFile.exists())
+                        ? LocalFileSystem.getInstance().refreshAndFindFileByNioFile(fetchedFile.toPath()) : null;
                 ApplicationManager.getApplication().invokeLater(() -> {
                     // 慢請求期間 editor/project 可能已被關閉/dispose，避免在已 dispose 的 UI 上操作；
                     // generation 不符代表已有更新的載入蓋過本次，捨棄過期結果
                     if (project.isDisposed() || disposed || myGen != generation) {
                         return;
                     }
-                    buildComponent(notePreview, fetchedFile, loadingLabel);
+                    buildComponent(notePreview, fetchedVf, loadingLabel);
                 });
             } catch (Exception e) {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -99,16 +102,15 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
         });
     }
 
-    private void buildComponent(NotePreview notePreview, File file, JBLabel loadingLabel) {
+    private void buildComponent(NotePreview notePreview, VirtualFile vf, JBLabel loadingLabel) {
         try {
             if (fileEditor != null) {
                 Disposer.dispose(fileEditor);
                 fileEditor = null;
             }
-            if (file == null || !file.exists()) {
+            if (vf == null) {
                 myComponent.addToCenter(new JBLabel("No note"));
             } else {
-                VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
                 FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
 
                 if (editorProviders != null && editorProviders.length > 0) {

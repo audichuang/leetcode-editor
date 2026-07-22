@@ -32,8 +32,9 @@ public class WindowFactory implements ToolWindowFactory, DumbAware {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
 
         ContentFactory contentFactory = ContentFactory.getInstance();
-        JComponent navigatorPanel = new NavigatorTabsPanel(toolWindow, project);
+        NavigatorTabsPanel navigatorPanel = new NavigatorTabsPanel(toolWindow, project);
         Content content = contentFactory.createContent(navigatorPanel, "", false);
+        content.setDisposer(navigatorPanel);
         toolWindow.getContentManager().addContent(content);
         if (PersistentConfig.getInstance().getInitConfig() != null) {
             if (!PersistentConfig.getInstance().getInitConfig().getShowToolIcon()) {

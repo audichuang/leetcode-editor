@@ -33,6 +33,7 @@ import javax.swing.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -179,6 +180,7 @@ public class AllNavigatorPanel extends SimpleToolWindowPanel implements Navigato
                 } else {
                     navigatorTable.getPageInfo().disposeFilters(filterKey, tag.getSlug(), b);
                 }
+                navigatorTable.getPageInfo().setPageIndex(1);
                 ViewManager.loadAllServiceData(this, myProject);
             }
 
@@ -238,11 +240,14 @@ public class AllNavigatorPanel extends SimpleToolWindowPanel implements Navigato
                 }
                 navigatorTable.getPageInfo().clearFilter();
                 navigatorTable.getPageInfo().getFilters().setSearchKeywords("");
-                queryField.setText("");
+                ApplicationManager.getApplication().invokeLater(() -> queryField.setText(""));
 
                 getFind().clearFilter();
                 ViewManager.loadAllServiceData(this, myProject, slug, false);
-                return selectedRow(slug);
+                // loadAllServiceData 在本 BGT 同步完成 setRows，這裡讀的是切好的新資料而非舊 UI 狀態；
+                // 實際選列由上面 loadAllServiceData -> loadData -> refreshData 的 invokeLater 內建 selectedRow(slug) 完成
+                List<QuestionView> rows = navigatorTable.getPageInfo().getRows();
+                return rows != null && rows.stream().anyMatch(q -> slug.equals(q.getTitleSlug()));
             }
         };
     }

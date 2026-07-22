@@ -61,14 +61,14 @@ public class LoginPanel extends DialogWrapper {
                 jcefPanel = new JcefPanel(project, okAction,true);
             }
             Disposer.register(getDisposable(),jcefPanel);
-            jcefPanel.getComponent().setMinimumSize(new Dimension(1000, 500));
-            jcefPanel.getComponent().setPreferredSize(new Dimension(1000, 500));
+            jcefPanel.getComponent().setMinimumSize(JBUI.size(1000, 500));
+            jcefPanel.getComponent().setPreferredSize(JBUI.size(1000, 500));
             panel.addToCenter(new JBScrollPane(jcefPanel.getComponent(), JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
 
         } else {
             cookieText.setLineWrap(true);
-            cookieText.setMinimumSize(new Dimension(400, 200));
-            cookieText.setPreferredSize(new Dimension(400, 200));
+            cookieText.setMinimumSize(JBUI.size(400, 200));
+            cookieText.setPreferredSize(JBUI.size(400, 200));
             panel.addToCenter(new JBScrollPane(cookieText, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
             okAction = new OkAction() {
                 @Override
@@ -208,7 +208,7 @@ public class LoginPanel extends DialogWrapper {
                                         HttpLogin.loginSuccess(project, cookieList);
                                         MessageUtils.getInstance(project).showWarnMsg("", PropertiesUtils.getInfo("browser.login.success"));
                                         ApplicationManager.getApplication().invokeLater(() -> okAction.actionPerformed(null));
-                                        successDispose = true;
+                                        successDispose.set(true);
                                     } else {
                                         cookieList.clear();
                                         LogUtils.LOG.info("login failure");

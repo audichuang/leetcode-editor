@@ -155,8 +155,16 @@ public class ViewManager {
             });
         }
 
-        navigatorAction.getPageInfo().setRows(conformList);
-        navigatorAction.getPageInfo().setRowTotal(conformList.size());
+        pageInfo.setRowTotal(conformList.size());
+        if (selectTitleSlug != null) {
+            for (int i = 0; i < conformList.size(); i++) {
+                if (selectTitleSlug.equals(conformList.get(i).getTitleSlug())) {
+                    pageInfo.setPageIndex(i / pageInfo.getPageSize() + 1);
+                    break;
+                }
+            }
+        }
+        pageInfo.setRows(pageInfo.slice(conformList));
         navigatorAction.loadData(selectTitleSlug);
     }
 }

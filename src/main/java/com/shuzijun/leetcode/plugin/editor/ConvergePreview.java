@@ -7,11 +7,11 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.UserDataHolderBase;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.pom.Navigatable;
+import com.intellij.ui.tabs.JBEditorTabsBase;
+import com.intellij.ui.tabs.JBTabsFactory;
 import com.intellij.ui.tabs.TabInfo;
 import com.intellij.ui.tabs.TabsListener;
-import com.intellij.ui.tabs.impl.JBEditorTabs;
 import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.ui.JBUI;
 import com.shuzijun.leetcode.plugin.listener.LoginNotifier;
@@ -37,7 +37,7 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
 
 
     private JComponent myComponent;
-    private JBEditorTabs jbEditorTabs;
+    private JBEditorTabsBase jbEditorTabs;
 
     private LeetcodeEditor leetcodeEditor;
 
@@ -76,7 +76,7 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
     @Override
     public @NotNull JComponent getComponent() {
         if (myComponent == null) {
-            jbEditorTabs = new JBEditorTabs(project, IdeFocusManager.getInstance(project), this);
+            jbEditorTabs = JBTabsFactory.createEditorTabs(project, this);
             for (int i = 0; i < fileEditors.length; i++) {
                 TabInfo tabInfo = new TabInfo(fileEditors[i].getComponent());
                 tabInfo.setText(names[i]);
@@ -96,7 +96,7 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
             });
 
 
-            myComponent = JBUI.Panels.simplePanel(jbEditorTabs);
+            myComponent = JBUI.Panels.simplePanel(jbEditorTabs.getComponent());
         }
         return myComponent;
     }

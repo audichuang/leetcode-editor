@@ -4,6 +4,8 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextArea;
+import com.intellij.util.ui.JBUI;
 import com.shuzijun.leetcode.plugin.model.Question;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -19,17 +21,18 @@ public class TestcasePanel extends DialogWrapper {
 
     private Question question;
     private JPanel jpanel;
-    private JTextArea caseText;
+    private JBTextArea caseText;
 
     public TestcasePanel(@Nullable Project project, Question question) {
         super(project, true);
         this.question = question;
         jpanel = new JBPanel();
         jpanel.setLayout(new BorderLayout());
-        caseText = new JTextArea();
+        caseText = new JBTextArea();
+        caseText.getEmptyText().setText("Leave empty to use Example Testcases");
         JBScrollPane caseTextScroll =  new JBScrollPane(caseText, JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JBScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        caseTextScroll.setMinimumSize(new Dimension(400, 200));
-        caseTextScroll.setPreferredSize(new Dimension(400, 200));
+        caseTextScroll.setMinimumSize(JBUI.size(400, 200));
+        caseTextScroll.setPreferredSize(JBUI.size(400, 200));
         jpanel.add(caseTextScroll, BorderLayout.CENTER);
         setModal(true);
         init();
@@ -39,6 +42,11 @@ public class TestcasePanel extends DialogWrapper {
     @Override
     protected JComponent createCenterPanel() {
         return jpanel;
+    }
+
+    @Override
+    protected String getDimensionServiceKey() {
+        return "leetcode.editor.TestcasePanel";
     }
 
     @NotNull

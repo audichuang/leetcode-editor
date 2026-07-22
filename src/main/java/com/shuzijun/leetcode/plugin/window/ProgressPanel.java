@@ -42,7 +42,7 @@ public class ProgressPanel {
     }
 
     private void initUI(List<Session> sessionList) {
-        sessionBox.removeAll();
+        sessionBox.removeAllItems();
         for (Session session : sessionList) {
             sessionBox.addItem(session);
         }

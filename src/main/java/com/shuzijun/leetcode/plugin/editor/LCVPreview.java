@@ -57,8 +57,6 @@ public class LCVPreview extends UserDataHolderBase implements FileEditor {
             myHtmlPanelWrapper = JBUI.Panels.simplePanel();
             isPresentableUrl = myProject.getPresentableUrl() != null;
 
-            JBLabel loadingLabel = new JBLabel("Loading......");
-            myHtmlPanelWrapper.addToCenter(loadingLabel);
             String url = UrlEscapers.urlFragmentEscaper().escape(URLUtil.FILE_PROTOCOL + URLUtil.SCHEME_SEPARATOR + FileUtils.separator() + myFile.getPath());
             LCVPanel tempPanel = null;
             try {
@@ -73,7 +71,6 @@ public class LCVPreview extends UserDataHolderBase implements FileEditor {
                 myHtmlPanelWrapper.addToCenter(new JBLabel("<html><body>Your environment does not support JCEF.<br>Check the Registry 'ide.browser.jcef.enabled'.<br>" + e.getMessage() + "<body></html>"));
             } finally {
                 myPanel = tempPanel;
-                myHtmlPanelWrapper.remove(loadingLabel);
                 myHtmlPanelWrapper.repaint();
             }
         }

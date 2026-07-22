@@ -109,7 +109,7 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
     private void initComponent(String defaultId) {
         isLoad = true;
         int myGen = ++generation;
-        ApplicationManager.getApplication().invokeLater(() -> mySplitter.setFirstComponent(new JBLabel("Loading......")));
+        ApplicationManager.getApplication().invokeLater(() -> mySplitter.setFirstComponent(new JBLabel("Loading...", new com.intellij.ui.AnimatedIcon.Default(), SwingConstants.LEFT)));
         // 網路請求在背景執行緒完成，EDT 只負責組裝 UI
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
@@ -210,16 +210,19 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
     }
 
     private void openSubmission(Submission submission) {
-        mySplitter.setSecondComponent(new JBLabel("Loading......"));
+        mySplitter.setSecondComponent(new JBLabel("Loading...", new com.intellij.ui.AnimatedIcon.Default(), SwingConstants.LEFT));
         int myGen = ++generation;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             try {
                 File file = SubmissionManager.openSubmission(submission, question.getTitleSlug(), project, false);
+                // VFS refresh 就地在 BGT 做完，EDT 只組裝 UI，避免慢磁碟/網路掛載凍住 EDT
+                VirtualFile vf = (file != null && file.exists())
+                        ? LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file.toPath()) : null;
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (project.isDisposed() || disposed || myGen != generation) {
                         return;
                     }
-                    showSubmission(file);
+                    showSubmission(vf);
                 });
             } catch (Exception e) {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -232,18 +235,16 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
         });
     }
 
-    private void showSubmission(File file) {
-        if (file == null || !file.exists()) {
+    private void showSubmission(VirtualFile vf) {
+        if (vf == null) {
             mySplitter.setSecondComponent(new JBLabel("no submission"));
         } else {
-            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
             FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
             FileEditor newEditor = editorProviders[0].createEditor(project, vf);
             if (newEditor == fileEditor) {
                 return;
             }
             if (fileEditor != null) {
-                mySplitter.setSecondComponent(new JBLabel("Loading......"));
                 FileEditor temp = fileEditor;
                 Disposer.dispose(temp);
             }
