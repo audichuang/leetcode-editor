@@ -1,5 +1,6 @@
 package com.shuzijun.leetcode.plugin.editor.converge;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.AsyncFileEditorProvider;
 import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.project.Project;
@@ -33,10 +34,13 @@ public class ContentProvider extends LCVProvider implements AsyncFileEditorProvi
         Path contentFile = Path.of(leetcodeEditor.getContentPath());
         VirtualFile prepared = LocalFileSystem.getInstance().findFileByNioFile(contentFile);
         if (prepared == null) {
-            // VFS 快照遺失 content 檔:這裡不能同步 refresh(read action 內),改排非阻塞
-            // async refresh 讓 refresh worker 先跑;到 build() 時多半已補進 VFS,可免掉
-            // EDT 上的同步 refresh 最後手段。
-            LocalFileSystem.getInstance().refreshNioFiles(List.of(contentFile), true, false, null);
+            // VFS 快照遺失 content 檔:這裡不能碰任何 refresh——連 refreshNioFiles(async=true)
+            // 都不行,262 的 LocalFileSystemImpl 會先同步跑 refreshNioFilesInternal(),缺 node
+            // 時建 VFileCreateEvent 走 RefreshQueue.processEvents(false),在 read lock 下直接
+            // Logger.error 棄單。丟到 pooled thread(無 read action)排非阻塞 refresh 讓
+            // refresh worker 先跑;到 build() 時多半已補進 VFS,可免掉 EDT 同步 refresh 最後手段。
+            ApplicationManager.getApplication().executeOnPooledThread(() ->
+                    LocalFileSystem.getInstance().refreshNioFiles(List.of(contentFile), true, false, null));
         }
         return new Builder() {
             @Override

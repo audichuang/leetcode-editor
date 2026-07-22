@@ -75,7 +75,7 @@ public class ConvergeProvider implements AsyncFileEditorProvider, DumbAware {
 
     @NotNull
     public static Builder getBuilderFromEditorProvider(@NotNull final FileEditorProvider provider, @NotNull final Project project, @NotNull final VirtualFile file) {
-        if (provider instanceof AsyncFileEditorProvider) {
+        if (provider instanceof AsyncFileEditorProvider && overridesLegacyCreateEditorAsync(provider)) {
             return ((AsyncFileEditorProvider) provider).createEditorAsync(project, file);
         } else {
             return new Builder() {
@@ -84,6 +84,23 @@ public class ConvergeProvider implements AsyncFileEditorProvider, DumbAware {
                     return provider.createEditor(project, file);
                 }
             };
+        }
+    }
+
+    /**
+     * 262 起平台自家 provider(TextEditorProvider/PsiAwareTextEditorProvider 等)只實作新版
+     * suspend createFileEditor,legacy createEditorAsync 的 interface default 直接
+     * throw IllegalStateException("Should not be called")(SDK bytecode 驗證)——
+     * instanceof AsyncFileEditorProvider 不代表 legacy API 可呼叫。只對「真的 override 了
+     * legacy 方法」的 provider(實務上是本 plugin 自己的 ConvergeProvider/ContentProvider)
+     * 展開 async prep,其餘一律退回 build() 時 createEditor 的包裝。
+     */
+    private static boolean overridesLegacyCreateEditorAsync(@NotNull FileEditorProvider provider) {
+        try {
+            return provider.getClass().getMethod("createEditorAsync", Project.class, VirtualFile.class)
+                    .getDeclaringClass() != AsyncFileEditorProvider.class;
+        } catch (NoSuchMethodException e) {
+            return false;
         }
     }
 }
