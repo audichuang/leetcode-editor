@@ -4,6 +4,7 @@ import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.extensions.PluginId;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.shuzijun.leetcode.plugin.model.Config;
@@ -33,8 +34,19 @@ public class SentryUtils {
             synchronized (SentryUtils.class) {
                 client = sentryClient;
                 if (client == null) {
-                    client = SentryClientFactory.sentryClient("https://ac9e2d69c3294870848cee5b1b23ad51@sentry.io/1534194");
-                    sentryClient = client;
+                    final SentryClient created = SentryClientFactory.sentryClient("https://ac9e2d69c3294870848cee5b1b23ad51@sentry.io/1534194");
+                    sentryClient = created;
+                    client = created;
+                    // ponytail: application卸載/重載時關閉底層連線池(1.7.9預設帶專用ThreadPoolExecutor)
+                    // 並清static參照,避免舊classloader被連線緒釘住;最小可行做法,不另建application service。
+                    Disposer.register(ApplicationManager.getApplication(), () -> {
+                        synchronized (SentryUtils.class) {
+                            created.closeConnection();
+                            if (sentryClient == created) {
+                                sentryClient = null;
+                            }
+                        }
+                    });
                 }
             }
         }
@@ -105,7 +117,13 @@ public class SentryUtils {
         context.addTag("javaVersion", SystemInfo.JAVA_RUNTIME_VERSION);
         context.addTag("pluginVersion", PluginManagerCore.getPlugin(PluginId.getId(PluginConstant.PLUGIN_ID)).getVersion());
 
-        sentry.sendEvent(eventBuilder);
+        try {
+            sentry.sendEvent(eventBuilder);
+        } finally {
+            // ponytail: pooled thread會被其他任務重用,送出後(含失敗)一律清掉本次user/tags,
+            // 避免context留在ThreadLocal上跨report洩漏、卡住classloader回收。
+            sentry.clearContext();
+        }
 
     }
 

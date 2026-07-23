@@ -5,6 +5,7 @@ import com.intellij.openapi.fileEditor.FileEditorProvider;
 import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.fileEditor.impl.text.PsiAwareTextEditorProvider;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.shuzijun.leetcode.plugin.editor.converge.ContentProvider;
 import com.shuzijun.leetcode.plugin.editor.converge.NoteProvider;
@@ -58,7 +59,23 @@ public class QuestionEditorProvider extends SplitTextEditorProvider {
         final Builder secondBuilder = getBuilderFromEditorProvider(this.mySecondProvider, project, file);
         return new Builder() {
             public FileEditor build() {
-                return createSplitEditor(firstBuilder.build(), secondBuilder.build());
+                FileEditor firstEditor = null;
+                FileEditor secondEditor = null;
+                try {
+                    firstEditor = firstBuilder.build();
+                    secondEditor = secondBuilder.build();
+                    return createSplitEditor(firstEditor, secondEditor);
+                } catch (RuntimeException | Error e) {
+                    // secondBuilder.build()或createSplitEditor失敗時,firstEditor(可能還有已建好的
+                    // secondEditor)在composite接手前都沒有owner,反向dispose後重拋,避免洩漏。
+                    if (secondEditor != null) {
+                        Disposer.dispose(secondEditor);
+                    }
+                    if (firstEditor != null) {
+                        Disposer.dispose(firstEditor);
+                    }
+                    throw e;
+                }
             }
         };
     }

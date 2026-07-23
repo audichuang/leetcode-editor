@@ -93,6 +93,23 @@ public class LCVPanel extends JCEFHtmlPanel {
     }
 
     private void init() {
+        try {
+            initHandlersAndLoad();
+        } catch (Throwable t) {
+            // ponytail: 中途拋例外時 constructor 不會返回，外層拿不到 this 也就無法 dispose；
+            // 這裡直接複用 dispose()（已做 null-guard，未註冊的 handler 會略過）做 best-effort 清理再往外拋
+            dispose();
+            if (t instanceof RuntimeException) {
+                throw (RuntimeException) t;
+            } else if (t instanceof Error) {
+                throw (Error) t;
+            } else {
+                throw new RuntimeException(t);
+            }
+        }
+    }
+
+    private void initHandlersAndLoad() {
         getJBCefClient().addRequestHandler(requestHandler = new CefRequestHandlerAdapter() {
             @Override
             public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean user_gesture, boolean is_redirect) {
@@ -172,9 +189,28 @@ public class LCVPanel extends JCEFHtmlPanel {
 
     @Override
     public void dispose() {
-        getJBCefClient().removeRequestHandler(requestHandler, getCefBrowser());
-        getJBCefClient().removeLifeSpanHandler(lifeSpanHandler, getCefBrowser());
-        super.dispose();
+        try {
+            if (requestHandler != null) {
+                try {
+                    getJBCefClient().removeRequestHandler(requestHandler, getCefBrowser());
+                } catch (Throwable t) {
+                    LOG.warn("failed to remove request handler on dispose", t);
+                } finally {
+                    requestHandler = null;
+                }
+            }
+            if (lifeSpanHandler != null) {
+                try {
+                    getJBCefClient().removeLifeSpanHandler(lifeSpanHandler, getCefBrowser());
+                } catch (Throwable t) {
+                    LOG.warn("failed to remove life span handler on dispose", t);
+                } finally {
+                    lifeSpanHandler = null;
+                }
+            }
+        } finally {
+            super.dispose();
+        }
     }
 
     private void openUrl(String url) {
@@ -215,12 +251,14 @@ public class LCVPanel extends JCEFHtmlPanel {
                 }
                 templateCache = template;
             }
+            // ponytail: 小 placeholder 全部先在小 template 上替換完，{{fileValue}}（可能是整份大檔案內容）放最後才插入，
+            // 這樣大字串只被建構這一次，不會被後面幾個 placeholder 的 replace() 再全文掃過
             return template.replace("{{service}}", servicePath.getScheme() + URLUtil.SCHEME_SEPARATOR + servicePath.getAuthority() + servicePath.getPath())
                     .replace("{{serverToken}}", org.apache.commons.lang3.StringUtils.isNotBlank(servicePath.getParameters()) ? servicePath.getParameters().substring(1) : "")
-                    .replace("{{fileValue}}", text)
                     .replace("{{Lang}}", PropertiesUtils.getInfo("Lang"))
                     .replace("{{darcula}}", StartupUiUtil.INSTANCE.isDarkTheme() + "")
                     .replace("{{ideStyle}}", getStyle(true))
+                    .replace("{{fileValue}}", text)
                     ;
         } catch (IOException e) {
             throw new RuntimeException(e);

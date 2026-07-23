@@ -41,9 +41,10 @@ public class DonateListener implements ActionListener {
         public DonatePanel(@Nullable Project project) {
             super(project, true);
             jpanel = new JPanel();
-            try {
-                jpanel.add(new JLabel(new ImageIcon(ImageIO.read(this.getClass().getClassLoader().getResourceAsStream("image/WeChat.png")))));
-                jpanel.add(new JLabel(new ImageIcon(ImageIO.read(this.getClass().getClassLoader().getResourceAsStream("image/AliPay.png")))));
+            try (java.io.InputStream weChatStream = this.getClass().getClassLoader().getResourceAsStream("image/WeChat.png");
+                 java.io.InputStream aliPayStream = this.getClass().getClassLoader().getResourceAsStream("image/AliPay.png")) {
+                jpanel.add(new JLabel(new ImageIcon(ImageIO.read(weChatStream))));
+                jpanel.add(new JLabel(new ImageIcon(ImageIO.read(aliPayStream))));
             } catch (IOException e) {
                LogUtils.LOG.error("加载图片失败",e);
             }

@@ -174,6 +174,23 @@ public class LoginPanel extends DialogWrapper {
         }
 
         private void init(){
+            try {
+                initLoadHandlerAndLoad();
+            } catch (Throwable t) {
+                // ponytail: 中途拋例外時 constructor 不會返回，外層(LoginPanel)沒機會 dispose 已配置的 browser；
+                // 直接複用 dispose()（已做 null-guard）做 best-effort 清理再往外拋，保留原例外型別給外層 catch(IllegalArgumentException) 用
+                dispose();
+                if (t instanceof RuntimeException) {
+                    throw (RuntimeException) t;
+                } else if (t instanceof Error) {
+                    throw (Error) t;
+                } else {
+                    throw new RuntimeException(t);
+                }
+            }
+        }
+
+        private void initLoadHandlerAndLoad(){
             getJBCefClient().addLoadHandler(cefLoadHandler = new CefLoadHandlerAdapter() {
 
                 // AtomicBoolean：JCEF 回呼可能在不同執行緒觸發（IO/UI/remote pool），plain boolean 無跨緒可見性保證
@@ -230,18 +247,29 @@ public class LoginPanel extends DialogWrapper {
 
         @Override
         public void dispose() {
-            getJBCefClient().removeLoadHandler(cefLoadHandler, getCefBrowser());
             try {
-                // ponytail: deleteCookies(url, boolean) is deprecated in 262; deleteCookies(url, cookieName)
-                // with cookieName=null means "delete all cookies for this url", same effect as the old overload.
-                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, (String) null);
-                getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, (String) null);
-            } catch (Exception e) {
-                // ponytail: cef_server may not be established yet when the dialog closes early (#754); clearing
-                // cookies is best-effort, next login overwrites them, so just log and continue disposing.
-                LogUtils.LOG.warn("failed to delete jcef cookies on dispose", e);
+                if (cefLoadHandler != null) {
+                    try {
+                        getJBCefClient().removeLoadHandler(cefLoadHandler, getCefBrowser());
+                    } catch (Throwable t) {
+                        LogUtils.LOG.warn("failed to remove load handler on dispose", t);
+                    } finally {
+                        cefLoadHandler = null;
+                    }
+                }
+                try {
+                    // ponytail: deleteCookies(url, boolean) is deprecated in 262; deleteCookies(url, cookieName)
+                    // with cookieName=null means "delete all cookies for this url", same effect as the old overload.
+                    getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcode, (String) null);
+                    getJBCefBrowser(getCefBrowser()).getJBCefCookieManager().deleteCookies(URLUtils.leetcodecn, (String) null);
+                } catch (Exception e) {
+                    // ponytail: cef_server may not be established yet when the dialog closes early (#754); clearing
+                    // cookies is best-effort, next login overwrites them, so just log and continue disposing.
+                    LogUtils.LOG.warn("failed to delete jcef cookies on dispose", e);
+                }
+            } finally {
+                super.dispose();
             }
-            super.dispose();
         }
     }
 }

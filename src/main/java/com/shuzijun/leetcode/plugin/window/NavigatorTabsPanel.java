@@ -253,30 +253,49 @@ public class NavigatorTabsPanel extends SimpleToolWindowPanel implements Disposa
         NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.remove(id);
     }
 
-    public static synchronized void loadUser(boolean login) {
-        // 登入/登出後帳號狀態已變，殘留的 HTTP 快取（userStatus、清單）一律作廢
+    // 輪詢重試次數/間隔上限：指數退避 500ms→...→8s 封頂，且不超過 LOAD_USER_DEADLINE_MILLIS 總時長，
+    // 取代舊版「鎖內最多 51 次 GraphQL、光 sleep 就 36 秒」。
+    private static final int LOAD_USER_MAX_ATTEMPTS = 6;
+    private static final long LOAD_USER_MAX_DELAY_MILLIS = 8_000L;
+    private static final long LOAD_USER_DEADLINE_MILLIS = 30_000L;
+
+    public static void loadUser(boolean login) {
+        // 登入/登出後帳號狀態已變，殘留的 HTTP 快取（userStatus、清單）一律作廢；
+        // 這兩個呼叫本身 thread-safe（Guava cache / volatile 計數器），不需要靠外層鎖保護，
+        // RefreshAction/ProgressAction 也是直接無鎖呼叫它們。
         HttpRequestUtils.invalidateCache();
-        // QuestionManager 的 questionCache/questionAllCache/questionIndexCache/dayMap 也是舊帳號資料，一併清空
         QuestionManager.invalidateAll();
-        User user = null;
-        if (login) {
-            for (int i = 0; i <= 50; i++) {
-                user = QuestionManager.getUser();
-                if (!user.isSignedIn()) {
-                    try {
-                        Thread.sleep(500 + (i / 10 * 100));
-                    } catch (InterruptedException ignore) {
-                    }
-                } else {
-                    break;
-                }
-                if(i == 50){
-                    LogUtils.LOG.warn("User data is not synchronized");
-                }
+        // 網路輪詢與 sleep 移出鎖外：不同 project 併發呼叫 loadUser(true) 不再彼此排隊等 30 秒；
+        // 只有下面把結果寫回各面板快取這一步需要跟其他 loadUser 呼叫互斥。
+        User user = login ? waitForSignedInUser() : new User();
+        publishUser(user);
+    }
+
+    private static User waitForSignedInUser() {
+        long deadline = System.currentTimeMillis() + LOAD_USER_DEADLINE_MILLIS;
+        long delay = 500L;
+        User user = new User();
+        for (int attempt = 0; attempt < LOAD_USER_MAX_ATTEMPTS; attempt++) {
+            user = QuestionManager.getUser();
+            if (user.isSignedIn()) {
+                return user;
             }
-        } else {
-            user = new User();
+            if (attempt == LOAD_USER_MAX_ATTEMPTS - 1 || System.currentTimeMillis() + delay >= deadline) {
+                break;
+            }
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return user;
+            }
+            delay = Math.min(delay * 2, LOAD_USER_MAX_DELAY_MILLIS);
         }
+        LogUtils.LOG.warn("User data is not synchronized");
+        return user;
+    }
+
+    private static synchronized void publishUser(User user) {
         Collection<NavigatorTabsPanel> collection = NAVIGATOR_TABS_PANEL_DISPOSABLE_MAP.values();
         for (NavigatorTabsPanel navigatorTabsPanel : collection) {
             navigatorTabsPanel.userCache.put(URLUtils.getLeetcodeHost(), user);

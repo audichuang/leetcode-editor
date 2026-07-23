@@ -185,6 +185,15 @@ public class CodeManager {
         }
     }
 
+    // 提交/執行結果輪詢的共用退避序列：300ms→500ms→1s→2s 封頂，總時長維持原本約 30 秒量級的上限；
+    // 慢結果時不再固定 300ms 打滿到位上限的請求數。
+    private static final long[] POLL_BACKOFF_MILLIS = {300L, 500L, 1000L, 2000L};
+    private static final long POLL_DEADLINE_MILLIS = 30_000L;
+
+    private static long pollDelayMillis(int attempt) {
+        return POLL_BACKOFF_MILLIS[Math.min(attempt, POLL_BACKOFF_MILLIS.length - 1)];
+    }
+
     private static class SubmitCheckTask extends Task.Backgroundable {
 
         private Question question;
@@ -203,7 +212,8 @@ public class CodeManager {
         @Override
         public void run(@NotNull ProgressIndicator progressIndicator) {
             String key = returnObj.getString("submission_id");
-            for (int i = 0; i < 100; i++) {
+            long deadline = System.currentTimeMillis() + POLL_DEADLINE_MILLIS;
+            for (int attempt = 0; System.currentTimeMillis() < deadline; attempt++) {
                 if (progressIndicator.isCanceled()) {
                     MessageUtils.getInstance(project).showWarnMsg("", PropertiesUtils.getInfo("request.cancel"));
                     return;
@@ -260,7 +270,7 @@ public class CodeManager {
                         }
 
                     }
-                    Thread.sleep(300L);
+                    Thread.sleep(pollDelayMillis(attempt));
                 } catch (Exception e) {
                     LogUtils.LOG.error("提交出错", e);
                     MessageUtils.getInstance(project).showWarnMsg("", PropertiesUtils.getInfo("request.failed"));
@@ -313,7 +323,8 @@ public class CodeManager {
             if (StringUtils.isBlank(key)) {
                 key = returnObj.getString("interpret_id");
             }
-            for (int i = 0; i < 100; i++) {
+            long deadline = System.currentTimeMillis() + POLL_DEADLINE_MILLIS;
+            for (int attempt = 0; System.currentTimeMillis() < deadline; attempt++) {
                 if (progressIndicator.isCanceled()) {
                     MessageUtils.getInstance(project).showWarnMsg("", PropertiesUtils.getInfo("request.cancel"));
                     return;
@@ -360,7 +371,7 @@ public class CodeManager {
                         }
 
                     }
-                    Thread.sleep(300L);
+                    Thread.sleep(pollDelayMillis(attempt));
                 } catch (Exception e) {
                     LogUtils.LOG.error("提交出错，body:" + body + ",returnObj:" + returnObj.toJSONString(), e);
                     MessageUtils.getInstance(project).showWarnMsg("", PropertiesUtils.getInfo("request.failed"));

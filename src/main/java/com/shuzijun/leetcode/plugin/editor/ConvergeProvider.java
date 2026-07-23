@@ -3,6 +3,7 @@ package com.shuzijun.leetcode.plugin.editor;
 import com.intellij.openapi.fileEditor.*;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -41,10 +42,21 @@ public class ConvergeProvider implements AsyncFileEditorProvider, DumbAware {
             @Override
             public TextEditor build() {
                 FileEditor[] fileEditors = new FileEditor[editorProviders.length];
-                for (int i = 0; i < builders.length; i++) {
-                    fileEditors[i] = builders[i].build();
+                try {
+                    for (int i = 0; i < builders.length; i++) {
+                        fileEditors[i] = builders[i].build();
+                    }
+                    return createSplitEditor(fileEditors, project, file);
+                } catch (RuntimeException | Error e) {
+                    // 建構composite本身失敗也要走這裡:已成功的子editor在composite接手前都沒有owner,
+                    // 反向dispose已建立的子editor後才重拋,避免project/JCEF資源跨過project close洩漏。
+                    for (int i = fileEditors.length - 1; i >= 0; i--) {
+                        if (fileEditors[i] != null) {
+                            Disposer.dispose(fileEditors[i]);
+                        }
+                    }
+                    throw e;
                 }
-                return createSplitEditor(fileEditors,project,file);
             }
         };
     }
