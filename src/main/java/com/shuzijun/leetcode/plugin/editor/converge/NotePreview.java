@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.ActionToolbar;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.*;
+import com.intellij.openapi.fileEditor.ex.FileEditorProviderManager;
 import com.intellij.openapi.fileEditor.impl.text.PsiAwareTextEditorProvider;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
@@ -20,7 +21,6 @@ import com.shuzijun.leetcode.plugin.editor.ConvergePreview;
 import com.shuzijun.leetcode.plugin.manager.NoteManager;
 import com.shuzijun.leetcode.plugin.model.LeetcodeEditor;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
-import com.shuzijun.leetcode.plugin.utils.FileEditorProviderReflection;
 import com.shuzijun.leetcode.plugin.utils.URLUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -111,7 +111,7 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
             if (vf == null) {
                 myComponent.addToCenter(new JBLabel("No note"));
             } else {
-                FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
+                FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
 
                 if (editorProviders != null && editorProviders.length > 0) {
                     fileEditor = editorProviders[0].createEditor(project, vf);

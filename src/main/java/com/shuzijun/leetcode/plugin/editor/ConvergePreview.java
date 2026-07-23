@@ -41,6 +41,8 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
 
     private LeetcodeEditor leetcodeEditor;
 
+    private volatile boolean disposed = false;
+
     public ConvergePreview(@NotNull FileEditor[] fileEditors, String[] names, Project project, VirtualFile file) {
         this.project = project;
         this.fileEditors = fileEditors;
@@ -56,18 +58,30 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
             @Override
             public void login(Project project, String host) {
                 if (host.equals(leetcodeEditor.getHost())) {
-                    for (int i = 0; i < names.length; i++) {
-                        fileEditors[i].setState(LoginState.getState(true, tabInfos[i] == jbEditorTabs.getSelectedInfo()));
-                    }
+                    // loginSuccess()/HttpLogin 在背景緒同步發布這個 topic；jbEditorTabs 是 lazy getComponent() 才建立的 Swing 物件，
+                    // 且 setState() 要在 EDT 做，故整段查詢+更新包進 invokeLater，並防禦尚未初始化/已釋放。
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (project.isDisposed() || disposed || jbEditorTabs == null) {
+                            return;
+                        }
+                        for (int i = 0; i < names.length; i++) {
+                            fileEditors[i].setState(LoginState.getState(true, tabInfos[i] == jbEditorTabs.getSelectedInfo()));
+                        }
+                    });
                 }
             }
 
             @Override
             public void logout(Project project, String host) {
                 if (host.equals(leetcodeEditor.getHost())) {
-                    for (int i = 0; i < names.length; i++) {
-                        fileEditors[i].setState(LoginState.getState(false, tabInfos[i] == jbEditorTabs.getSelectedInfo()));
-                    }
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (project.isDisposed() || disposed || jbEditorTabs == null) {
+                            return;
+                        }
+                        for (int i = 0; i < names.length; i++) {
+                            fileEditors[i].setState(LoginState.getState(false, tabInfos[i] == jbEditorTabs.getSelectedInfo()));
+                        }
+                    });
                 }
             }
         });
@@ -153,6 +167,7 @@ public class ConvergePreview extends UserDataHolderBase implements TextEditor {
 
     @Override
     public void dispose() {
+        disposed = true;
         for (FileEditor fileEditor : fileEditors) {
             Disposer.dispose(fileEditor);
         }

@@ -39,11 +39,12 @@ public class QueryKeyListener implements KeyListener {
     @Override
     public void keyPressed(KeyEvent e) {
         if (e.getKeyChar() == KeyEvent.VK_ENTER) {
+            // keyPressed 在 EDT 觸發，先在這裡讀完 Swing 元件的文字，背景 task 只拿純資料，不碰 jTextField。
+            String query = jTextField.getText();
             ProgressManager.getInstance().run(new Task.Backgroundable(project, "Search", false) {
                 @Override
                 public void run(@NotNull ProgressIndicator progressIndicator) {
-                    String selectText = jTextField.getText();
-                    navigatorAction.getPageInfo().disposeFilters("searchKeywords", selectText, StringUtils.isNotBlank(selectText));
+                    navigatorAction.getPageInfo().disposeFilters("searchKeywords", query, StringUtils.isNotBlank(query));
                     navigatorAction.getPageInfo().setPageIndex(1);
                     navigatorAction.loadServiceData();
                 }

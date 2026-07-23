@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.*;
+import com.intellij.openapi.fileEditor.ex.FileEditorProviderManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.UserDataHolderBase;
@@ -25,7 +26,6 @@ import com.shuzijun.leetcode.plugin.model.LeetcodeEditor;
 import com.shuzijun.leetcode.plugin.model.PluginConstant;
 import com.shuzijun.leetcode.plugin.model.Question;
 import com.shuzijun.leetcode.plugin.model.Submission;
-import com.shuzijun.leetcode.plugin.utils.FileEditorProviderReflection;
 import com.shuzijun.leetcode.plugin.window.dialog.SubmissionsPanel;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
@@ -239,7 +239,7 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
         if (vf == null) {
             mySplitter.setSecondComponent(new JBLabel("no submission"));
         } else {
-            FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
+            FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
             FileEditor newEditor = editorProviders[0].createEditor(project, vf);
             if (newEditor == fileEditor) {
                 return;

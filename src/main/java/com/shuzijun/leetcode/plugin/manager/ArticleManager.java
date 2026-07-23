@@ -23,28 +23,47 @@ import java.util.concurrent.*;
  */
 public class ArticleManager {
 
+    // (host, titleSlug, articleSlug) 為 key 的 in-flight 去重：並行工作共用同一次下載/寫檔，完成後移除 key（T4 問題 B）
+    private static final ConcurrentHashMap<String, CompletableFuture<File>> IN_FLIGHT_ARTICLES = new ConcurrentHashMap<>();
+
     public static File openArticle(String titleSlug, String articleSlug, Project project, Boolean isOpenEditor) {
         String filePath = PersistentConfig.getInstance().getTempFilePath() + Constant.DOC_SOLUTION + articleSlug + "." + PluginConstant.LEETCODE_EDITOR_VIEW;
 
         File file = new File(filePath);
-        String host;
         if (!file.exists()) {
-            String article = getArticle(titleSlug, articleSlug, project);
-            if (URLUtils.isCn()) {
-                host = URLUtils.getLeetcodeProblems() + titleSlug + "/solution/" + articleSlug + "/";
-            } else {
-                host = URLUtils.getLeetcodeProblems() + titleSlug + "/solution/";
+            String key = URLUtils.getLeetcodeHost() + "#" + titleSlug + "#" + articleSlug;
+            File targetFile = file;
+            CompletableFuture<File> future = IN_FLIGHT_ARTICLES.computeIfAbsent(key, k ->
+                    CompletableFuture.supplyAsync(() -> fetchArticle(titleSlug, articleSlug, project, targetFile),
+                            command -> ApplicationManager.getApplication().executeOnPooledThread(command))
+                            .whenComplete((f, e) -> IN_FLIGHT_ARTICLES.remove(k)));
+            try {
+                file = future.get();
+            } catch (Exception e) {
+                LogUtils.LOG.error("article acquisition failed", e);
+                MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("response.code"));
             }
-            if (StringUtils.isBlank(article)) {
-                return file;
-            }
-            article = formatMarkdown(article, host);
-
-            FileUtils.saveFile(file, article);
         }
         if (isOpenEditor) {
             FileUtils.openFileEditor(file, project);
         }
+        return file;
+    }
+
+    private static File fetchArticle(String titleSlug, String articleSlug, Project project, File file) {
+        String article = getArticle(titleSlug, articleSlug, project);
+        String host;
+        if (URLUtils.isCn()) {
+            host = URLUtils.getLeetcodeProblems() + titleSlug + "/solution/" + articleSlug + "/";
+        } else {
+            host = URLUtils.getLeetcodeProblems() + titleSlug + "/solution/";
+        }
+        if (StringUtils.isBlank(article)) {
+            return file;
+        }
+        article = formatMarkdown(article, host);
+
+        FileUtils.saveFile(file, article);
         return file;
     }
 

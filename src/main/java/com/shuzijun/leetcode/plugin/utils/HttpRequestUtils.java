@@ -128,12 +128,35 @@ public class HttpRequestUtils {
         return headerMap.get("x-csrftoken");
     }
 
+    // isLogin 原本每次呼叫都真的打一個 GET；這裡加短 TTL 快取 + in-flight 合併：
+    // 併發呼叫共用同一把 lock，只有第一個真的發請求，其餘在鎖內重新檢查會直接讀到剛寫入的快取。
+    // 用獨立的 lock 物件而非 static synchronized，避免這個可能較慢的網路呼叫卡住 setCookie/resetHttpclient 等 cookie 寫入。
+    // 快取失效統一掛在 setCookie/setCookieIfAbsent/resetHttpclient（唯三會改變登入狀態的地方）——
+    // 涵蓋登入成功、登出、cookie 貼上/JCEF 掃描等所有路徑，不需要在每個外部呼叫端各補一次 invalidate。
+    private static final long AUTH_CACHE_TTL_MILLIS = 30_000L;
+    private static final Object AUTH_CACHE_LOCK = new Object();
+    private static volatile long authCacheTimestamp = -1L;
+    private static volatile boolean authCacheResult = false;
+
     public static boolean isLogin(Project project) {
-        HttpResponse response = HttpRequest.builderGet(URLUtils.getLeetcodePoints()).request();
-        if (response.getStatusCode() == 200) {
-            return Boolean.TRUE;
+        long now = System.currentTimeMillis();
+        if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS) {
+            return authCacheResult;
         }
-        return Boolean.FALSE;
+        synchronized (AUTH_CACHE_LOCK) {
+            now = System.currentTimeMillis();
+            if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS) {
+                return authCacheResult;
+            }
+            HttpResponse response = HttpRequest.builderGet(URLUtils.getLeetcodePoints()).request();
+            authCacheResult = response.getStatusCode() == 200;
+            authCacheTimestamp = System.currentTimeMillis();
+            return authCacheResult;
+        }
+    }
+
+    private static void invalidateAuthCache() {
+        authCacheTimestamp = -1L;
     }
 
     // 以下 cookie 記憶體操作均 synchronized(HttpRequestUtils.class)：讓 clearCookie+addCookie 這種複合寫入原子化，
@@ -142,6 +165,7 @@ public class HttpRequestUtils {
     public static synchronized void setCookie(List<HttpCookie> cookieList) {
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
         enLcClient.getClient().cookieStore().addCookie(URLUtils.getLeetcodeHost(), cookieList);
+        invalidateAuthCache();
     }
 
     // 僅在記憶體尚無 session cookie 時才載入（restore 專用）：「檢查 + 載入」在同一把 HttpRequestUtils.class 鎖內原子完成。
@@ -153,10 +177,12 @@ public class HttpRequestUtils {
         }
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
         enLcClient.getClient().cookieStore().addCookie(URLUtils.getLeetcodeHost(), cookieList);
+        invalidateAuthCache();
     }
 
     public static synchronized void resetHttpclient() {
         enLcClient.getClient().cookieStore().clearCookie(URLUtils.getLeetcodeHost());
+        invalidateAuthCache();
     }
 
     // 記憶體 client 是否已握有登入用的 session cookie（判斷 restore 是否需要跑）。

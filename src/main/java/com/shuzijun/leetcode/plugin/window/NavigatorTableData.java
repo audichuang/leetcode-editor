@@ -72,16 +72,19 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         MessageBusConnection messageBusConnection = ApplicationManager.getApplication().getMessageBus().connect(this);
         messageBusConnection.subscribe(ConfigNotifier.TOPIC, (oldConfig, newConfig) -> loaColor(newConfig));
         messageBusConnection.subscribe(QuestionStatusNotifier.QUESTION_STATUS_TOPIC, question -> {
-            List<T> list = myList; // 快照一次，避免 EDT 中途換掉 myList 造成 size/get 撕裂
-            if (list != null) {
-                for (int i = 0; i < list.size(); i++) {
-                    if (dataNotifier(list.get(i), question)) {
-                        refreshRow(i);
-                        break;
+            // 發布者(SubmitCheckTask)在背景緒同步發布；myList 只在 EDT 讀寫，
+            // 整段查找+更新收進同一個 invokeLater，避免背景緒讀到中途被 refreshData() 換掉的 myList。
+            ApplicationManager.getApplication().invokeLater(() -> {
+                List<T> list = myList;
+                if (list != null) {
+                    for (int i = 0; i < list.size(); i++) {
+                        if (dataNotifier(list.get(i), question)) {
+                            refreshRow(i);
+                            break;
+                        }
                     }
                 }
-
-            }
+            });
         });
 
     }
@@ -121,15 +124,15 @@ public abstract class NavigatorTableData<T> extends JPanel implements Disposable
         return myPageInfo;
     }
 
+    // 只在 EDT 呼叫(唯一呼叫點是上面已包 invokeLater 的 subscriber)，
+    // 不再自己包 invokeLater，確保「找 row」與「更新 row」在同一個 EDT runnable 內原子完成。
     private void refreshRow(int row) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            if (myList == null || row >= myList.size() || row >= myTableModel.getRowCount()) {
-                return;
-            }
-            for (int j = 0; j < myTableModel.columnName.length; j++) {
-                myTableModel.setValueAt(myTableModel.getValue(myList.get(row), j), row, j);
-            }
-        });
+        if (myList == null || row >= myList.size() || row >= myTableModel.getRowCount()) {
+            return;
+        }
+        for (int j = 0; j < myTableModel.columnName.length; j++) {
+            myTableModel.setValueAt(myTableModel.getValue(myList.get(row), j), row, j);
+        }
     }
 
     public void refreshData(String selectTitleSlug) {

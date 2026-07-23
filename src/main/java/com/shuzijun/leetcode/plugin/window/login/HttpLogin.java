@@ -7,6 +7,7 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.ui.jcef.JBCefApp;
 import com.shuzijun.leetcode.plugin.listener.LoginNotifier;
 import com.shuzijun.leetcode.plugin.manager.NavigatorAction;
 import com.shuzijun.leetcode.plugin.model.Config;
@@ -22,8 +23,6 @@ import org.apache.http.HttpEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.HttpCookie;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -180,18 +179,7 @@ public class HttpLogin {
 
     public static boolean isEnabledJcef() {
         Config config = PersistentConfig.getInstance().getInitConfig();
-        return config != null && !config.isCookie() && isSupportedJcef();
-    }
-
-    public static boolean isSupportedJcef() {
-        try {
-            Class<?> JBCefAppClass = Class.forName("com.intellij.ui.jcef.JBCefApp");
-            Method method = JBCefAppClass.getMethod("isSupported");
-            return (boolean) method.invoke(null);
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException |
-                 InvocationTargetException e) {
-            return Boolean.FALSE;
-        }
+        return config != null && !config.isCookie() && JBCefApp.isSupported();
     }
 
 }

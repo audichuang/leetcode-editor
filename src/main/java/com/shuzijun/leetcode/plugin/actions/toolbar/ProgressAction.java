@@ -35,7 +35,9 @@ public class ProgressAction extends AbstractAction implements DumbAware {
             return;
         }
 
-        List<Session> sessionList = SessionManager.getSession(anActionEvent.getProject());
+        // cache=true：切換 session 後的遞迴重進會撞同一個 URL，讓它命中 StatisticsData.refresh()
+        // 剛寫入的 HTTP 快取，省掉重複的 progress GET（見下方切 session 分支）。
+        List<Session> sessionList = SessionManager.getSession(anActionEvent.getProject(), true);
         if (sessionList.isEmpty()) {
             return;
         }

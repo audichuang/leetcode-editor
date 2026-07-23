@@ -7,6 +7,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
@@ -98,15 +99,19 @@ public class LoginPanel extends DialogWrapper {
                     ProgressManager.getInstance().run(new Task.Backgroundable(project, PluginConstant.ACTION_PREFIX + ".loginSuccess", false) {
                         @Override
                         public void run(@NotNull ProgressIndicator progressIndicator) {
-                            if (HttpRequestUtils.isLogin(project)) {
-                                HttpLogin.loginSuccess(project, cookieList);
-                            } else {
-                                JOptionPane.showMessageDialog(null, PropertiesUtils.getInfo("login.failed"));
-                            }
-
+                            // 驗證是異步背景工作，doAction() 這裡不能同步等待，故關 dialog/顯示結果一律延到驗證完成後、
+                            // 於 invokeLater 內做；失敗時保持 dialog 開啟讓使用者重試，不呼叫 close()。
+                            boolean login = HttpRequestUtils.isLogin(project);
+                            ApplicationManager.getApplication().invokeLater(() -> {
+                                if (login) {
+                                    HttpLogin.loginSuccess(project, cookieList);
+                                    LoginPanel.this.close(DialogWrapper.OK_EXIT_CODE);
+                                } else {
+                                    Messages.showErrorDialog(project, PropertiesUtils.getInfo("login.failed"), "login");
+                                }
+                            });
                         }
                     });
-                    super.doAction(e);
                 }
             };
             okAction.putValue(Action.NAME, "login");

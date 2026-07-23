@@ -4,6 +4,7 @@ import com.intellij.icons.AllIcons;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.fileEditor.*;
+import com.intellij.openapi.fileEditor.ex.FileEditorProviderManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.UserDataHolderBase;
@@ -20,7 +21,6 @@ import com.shuzijun.leetcode.plugin.editor.SplitFileEditor;
 import com.shuzijun.leetcode.plugin.manager.ArticleManager;
 import com.shuzijun.leetcode.plugin.manager.QuestionManager;
 import com.shuzijun.leetcode.plugin.model.*;
-import com.shuzijun.leetcode.plugin.utils.FileEditorProviderReflection;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
@@ -63,6 +63,10 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
     // 多個背景 worker（login reload/submit refresh/快速切換選列）可能亂序完成，
     // 每次發起新背景載入就遞增，callback 套用結果前比對，只有最新一次會生效
     private volatile int generation = 0;
+
+    // 同一次選擇經 setState 的多個路徑（slug 派送 + tab selectionChanged）重入觸發 openArticle，
+    // 記錄最近一次已觸發的目標 slug，同 slug 的重入呼叫直接短路（T4 問題 B）
+    private String loadedArticleSlug;
 
     private List<Solution> solutionList;
     private JBTable table;
@@ -202,6 +206,11 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
     }
 
     private void openArticle() {
+        String targetSlug = question.getArticleSlug();
+        if (targetSlug != null && targetSlug.equals(loadedArticleSlug)) {
+            return;
+        }
+        loadedArticleSlug = targetSlug;
         mySplitter.setSecondComponent(new JBLabel("Loading...", new com.intellij.ui.AnimatedIcon.Default(), SwingConstants.LEFT));
         int myGen = ++generation;
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
@@ -230,24 +239,24 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
     private void showArticle(VirtualFile vf) {
         if (vf == null) {
             mySplitter.setSecondComponent(new JBLabel("no solution"));
-        } else {
-            FileEditorProvider[] editorProviders = FileEditorProviderReflection.getProviders(project, vf);
+            return;
+        }
+        // 同一篇題解（同一 VirtualFile）未變時重用既有 FileEditor，避免 dispose/重建 JCEF（T4 問題 A）
+        if (fileEditor == null || !vf.equals(fileEditor.getFile())) {
+            FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
             FileEditor newEditor = editorProviders[0].createEditor(project, vf);
-            if (newEditor == fileEditor) {
-                return;
-            }
             if (fileEditor != null) {
                 FileEditor temp = fileEditor;
                 Disposer.dispose(temp);
             }
             fileEditor = newEditor;
             Disposer.register(this, fileEditor);
-            BorderLayoutPanel secondComponent = JBUI.Panels.simplePanel(fileEditor.getComponent());
-            if (!Constant.ARTICLE_LIVE_ONE.equals(question.getArticleLive())) {
-                secondComponent.addToTop(createToolbarWrapper(fileEditor.getComponent()));
-            }
-            mySplitter.setSecondComponent(secondComponent);
         }
+        BorderLayoutPanel secondComponent = JBUI.Panels.simplePanel(fileEditor.getComponent());
+        if (!Constant.ARTICLE_LIVE_ONE.equals(question.getArticleLive())) {
+            secondComponent.addToTop(createToolbarWrapper(fileEditor.getComponent()));
+        }
+        mySplitter.setSecondComponent(secondComponent);
     }
 
     private SplitEditorToolbar createToolbarWrapper(JComponent targetComponentForActions) {
