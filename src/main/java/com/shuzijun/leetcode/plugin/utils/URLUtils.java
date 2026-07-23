@@ -16,7 +16,6 @@ public class URLUtils {
     private static String leetcodeUrl = "https://";
     private static String leetcodeLogin = "/accounts/login/";
     private static String leetcodeLogout = "/accounts/logout/";
-    private static String leetcodeAll = "/api/problems/all/";
     private static String leetcodeGraphql = "/graphql";
     private static String leetcodePoints = "/points/api/";
     private static String leetcodeProblems = "/problems/";
@@ -27,7 +26,6 @@ public class URLUtils {
     private static String leetcodeProgress = "/api/progress/all/";
     private static String leetcodeSession = "/session/";
     private static String leetcodeCardInfo = "/problems/api/card-info/";
-    private static String leetcodeRandomOneQuestion = "/problems/random-one-question/all";
 
     public static String getLeetcodeHost() {
         Config config = PersistentConfig.getInstance().getInitConfig();
@@ -62,10 +60,6 @@ public class URLUtils {
 
     public static String getLeetcodeLogout() {
         return getLeetcodeUrl() + leetcodeLogout;
-    }
-
-    public static String getLeetcodeAll() {
-        return getLeetcodeUrl() + leetcodeAll;
     }
 
     public static String getLeetcodeGraphql() {
@@ -130,9 +124,5 @@ public class URLUtils {
         } else {
             return "translatedName";
         }
-    }
-
-    public static String getLeetcodeRandomOneQuestion() {
-        return getLeetcodeUrl() + leetcodeRandomOneQuestion;
     }
 }

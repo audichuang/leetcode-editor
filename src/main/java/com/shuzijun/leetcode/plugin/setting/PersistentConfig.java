@@ -28,7 +28,6 @@ import java.util.Map;
 public class PersistentConfig implements PersistentStateComponent<PersistentConfig> {
 
     public static String PATH = "leetcode" + File.separator + "editor";
-    public static String OLDPATH = "leetcode-plugin";
     private static String INITNAME = "initConfig";
 
     private Map<String, Config> initConfig = new HashMap<>();

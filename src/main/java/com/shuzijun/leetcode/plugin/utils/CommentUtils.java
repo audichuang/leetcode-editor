@@ -57,17 +57,6 @@ public class CommentUtils {
         return isSupportMultilineComment?String.format(codeTypeEnum.getMultiLineComment(),sb):sb.toString();
     }
 
-    public static String createSubmissions(String html) {
-        String pageData = StringUtils.substringBetween(html, "var pageData =", "if (isNaN(pageData.submissionData.status_code))");
-        if (StringUtils.isBlank(pageData)) {
-            return pageData;
-        }
-        pageData = pageData.replaceAll("(\\r\\n|\\r|\\n|\\n\\r)", "");
-        pageData = pageData.substring(0, pageData.length() - 1);
-        pageData = pageData.replaceAll("status_code: parseInt\\('\\d+', \\d+\\),", "");
-        return pageData;
-    }
-
     private static boolean isSplit(char c) {
         if (c == 34 || c == 39 || (c >= 65 && c <= 90) || (c >= 97 && c <= 122)) {
             return false;

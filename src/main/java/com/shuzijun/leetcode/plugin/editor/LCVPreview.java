@@ -37,8 +37,6 @@ public class LCVPreview extends UserDataHolderBase implements FileEditor {
     private BorderLayoutPanel myHtmlPanelWrapper;
     private LCVPanel myPanel;
 
-    private boolean isPresentableUrl;
-
     public LCVPreview(@NotNull Project project, @NotNull VirtualFile file) {
         myProject = project;
         myFile = file;
@@ -55,7 +53,6 @@ public class LCVPreview extends UserDataHolderBase implements FileEditor {
     public @NotNull JComponent getComponent() {
         if (myHtmlPanelWrapper == null) {
             myHtmlPanelWrapper = JBUI.Panels.simplePanel();
-            isPresentableUrl = myProject.getPresentableUrl() != null;
 
             String url = UrlEscapers.urlFragmentEscaper().escape(URLUtil.FILE_PROTOCOL + URLUtil.SCHEME_SEPARATOR + FileUtils.separator() + myFile.getPath());
             LCVPanel tempPanel = null;

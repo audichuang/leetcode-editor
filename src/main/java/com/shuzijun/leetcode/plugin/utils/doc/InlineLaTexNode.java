@@ -8,11 +8,6 @@ import com.vladsch.flexmark.parser.core.delimiter.Delimiter;
  */
 public class InlineLaTexNode extends DelimitedNodeImpl {
 
-    public static final String HTML_TEX = "LaTex";
-
-    public static final String TOKEN_OPEN = "$";
-    public static final String TOKEN_CLOSE = "$";
-
     private final String mOpener;
     private final String mCloser;
 

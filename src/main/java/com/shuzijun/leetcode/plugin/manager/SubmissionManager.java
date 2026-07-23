@@ -44,9 +44,6 @@ public class SubmissionManager {
                         submission.setMemory(object.getString("memory"));
                         submissionList.add(submission);
                     }
-                   /* if (submissionList.size() == 0) {
-                        MessageUtils.getInstance(project).showInfoMsg("info", PropertiesUtils.getInfo("submission.empty"));
-                    }*/
                 }
             } else {
                 MessageUtils.getInstance(project).showWarnMsg("info", PropertiesUtils.getInfo("request.failed"));

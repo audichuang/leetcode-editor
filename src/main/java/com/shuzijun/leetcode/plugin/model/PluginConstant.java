@@ -36,13 +36,9 @@ public class PluginConstant {
 
     public static final String LEETCODE_SORT_PREFIX = ACTION_PREFIX + ".sort.";
 
-    public static final String LEETCODE_EDITOR_FAVORITE = ACTION_PREFIX + ".editor.favorite";
-
     public static final String LEETCODE_NAVIGATOR_ACTIONS_MENU = ACTION_PREFIX + ".NavigatorActionsMenu";
 
     public static final String LEETCODE_EDITOR_OPEN_CODE = ACTION_PREFIX + ".editor.openCode";
-
-    public static final String LEETCODE_EDITOR_TREE = ACTION_PREFIX + ".editor.tree";
 
     public static final String LEETCODE_TIMER_BAR_WIDGET = ACTION_PREFIX + ".TimerBarWidget";
 
@@ -66,8 +62,6 @@ public class PluginConstant {
     public static final String LEETCODE_EDITOR_QUESTION_STATUS_TOPIC = PLUGIN_ID + ".question.status";
 
     public static final String LEETCODE_EDITOR_QUESTION_SUBMIT_TOPIC = PLUGIN_ID + ".question.submit";
-
-    public static final String LEETCODE_EDITOR_LOGIN_CLOSE_TOPIC = PLUGIN_ID + ".login.close";
 
     public static final String LEETCODE_CODETOP_NAVIGATOR_ACTIONS_TOOLBAR = ACTION_PREFIX + ".codetop.NavigatorActionsToolbar";
     public static final String LEETCODE_CODETOP_FIND_TOOLBAR = ACTION_PREFIX + ".codetop.find.Toolbar";

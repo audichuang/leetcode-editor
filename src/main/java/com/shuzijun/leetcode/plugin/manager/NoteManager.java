@@ -22,10 +22,14 @@ import java.io.File;
 public class NoteManager {
 
 
+    private static String getNoteFilePath(Config config, Question question) {
+        return PersistentConfig.getInstance().getTempFilePath() + Constant.DOC_NOTE + VelocityUtils.convert(config.getCustomFileName(), question) + ".md";
+    }
+
     public static File show(String titleSlug, Project project, Boolean isOpenEditor) {
         Config config = PersistentConfig.getInstance().getConfig();
         Question question = QuestionManager.getQuestionByTitleSlug(titleSlug, project);
-        String filePath = PersistentConfig.getInstance().getTempFilePath() + Constant.DOC_NOTE + VelocityUtils.convert(config.getCustomFileName(), question) + ".md";
+        String filePath = getNoteFilePath(config, question);
         File file = new File(filePath);
         if (file.exists()) {
             if (isOpenEditor) {
@@ -49,7 +53,7 @@ public class NoteManager {
             }
             Question question = QuestionManager.getQuestionByTitleSlug(titleSlug, project);
             Config config = PersistentConfig.getInstance().getConfig();
-            String filePath = PersistentConfig.getInstance().getTempFilePath() + Constant.DOC_NOTE + VelocityUtils.convert(config.getCustomFileName(), question) + ".md";
+            String filePath = getNoteFilePath(config, question);
 
             HttpResponse response = Graphql.builder().operationName("getNote").variables("titleSlug",question.getTitleSlug()).request();
             if (response.getStatusCode() == 200) {
@@ -79,7 +83,7 @@ public class NoteManager {
 
             Config config = PersistentConfig.getInstance().getConfig();
             Question question = QuestionManager.getQuestionByTitleSlug(titleSlug, project);
-            String filePath = PersistentConfig.getInstance().getTempFilePath() + Constant.DOC_NOTE + VelocityUtils.convert(config.getCustomFileName(), question) + ".md";
+            String filePath = getNoteFilePath(config, question);
             File file = new File(filePath);
             if (!file.exists()) {
                 MessageUtils.getInstance(project).showWarnMsg("error", PropertiesUtils.getInfo("request.code"));

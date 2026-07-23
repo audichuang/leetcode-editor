@@ -74,7 +74,7 @@ public class Session {
     }
 
     public void setName(String name) {
-        if (name == null || name.trim().length() == 0) {
+        if (name == null || name.isBlank()) {
             this.name = "Anonymous Session";
         } else {
             this.name = name;

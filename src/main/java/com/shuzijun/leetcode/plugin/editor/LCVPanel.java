@@ -185,17 +185,20 @@ public class LCVPanel extends JCEFHtmlPanel {
             } else if (file.isDirectory()) {
                 Notifications.Bus.notify(new Notification(PluginConstant.NOTIFICATION_GROUP, "Cannot Open Directory", file.getPath() + " is a directory", NotificationType.INFORMATION), project);
             } else {
-                ApplicationManager.getApplication().invokeLater(() -> {
+                // VFS refresh 放背景緒，避免預覽點本地檔案連結時同步 refresh 凍住 EDT
+                ApplicationManager.getApplication().executeOnPooledThread(() -> {
                     VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
-                    FileEditor[] editors = FileEditorManager.getInstance(project).openFile(vf, false);
-                    if (editors == null || editors.length == 0) {
-                        FileType fileType = FileTypeChooser.getKnownFileTypeOrAssociate(vf, project);
-                        if (fileType == null || fileType == FileTypes.UNKNOWN) {
-                            return;
-                        } else {
-                            FileEditorManager.getInstance(project).openFile(vf, false);
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        FileEditor[] editors = FileEditorManager.getInstance(project).openFile(vf, false);
+                        if (editors == null || editors.length == 0) {
+                            FileType fileType = FileTypeChooser.getKnownFileTypeOrAssociate(vf, project);
+                            if (fileType == null || fileType == FileTypes.UNKNOWN) {
+                                return;
+                            } else {
+                                FileEditorManager.getInstance(project).openFile(vf, false);
+                            }
                         }
-                    }
+                    });
                 });
             }
         } else {

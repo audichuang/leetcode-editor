@@ -64,10 +64,6 @@ public class HttpRequest {
         return cache;
     }
 
-    public String getCacheParam() {
-        return cacheParam;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

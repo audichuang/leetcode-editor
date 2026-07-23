@@ -67,31 +67,6 @@ public abstract class SplitFileEditor<E1 extends FileEditor, E2 extends FileEdit
         if (mySecondEditor instanceof TextEditor) {
             mySecondEditor.putUserData(PARENT_SPLIT_KEY, this);
         }
-
-       /* MarkdownApplicationSettings.SettingsChangedListener settingsChangedListener =
-                new MarkdownApplicationSettings.SettingsChangedListener() {
-                    @Override
-                    public void beforeSettingsChanged(@NotNull MarkdownApplicationSettings newSettings) {
-                        SplitFileEditor.SplitEditorLayout oldSplitEditorLayout =
-                                MarkdownApplicationSettings.getInstance().getMarkdownPreviewSettings().getSplitEditorLayout();
-
-                        boolean oldVerticalSplitOption =
-                                MarkdownApplicationSettings.getInstance().getMarkdownPreviewSettings().isVerticalSplit();
-
-                        ApplicationManager.getApplication().invokeLater(() -> {
-                            if (oldSplitEditorLayout == mySplitEditorLayout) {
-                                triggerLayoutChange(newSettings.getMarkdownPreviewSettings().getSplitEditorLayout(), false);
-                            }
-
-                            if (oldVerticalSplitOption == myVerticalSplitOption) {
-                                triggerSplitOrientationChange(newSettings.getMarkdownPreviewSettings().isVerticalSplit());
-                            }
-                        });
-                    }
-                };
-
-        ApplicationManager.getApplication().getMessageBus().connect(this)
-                .subscribe(MarkdownApplicationSettings.SettingsChangedListener.TOPIC, settingsChangedListener);*/
     }
 
     private void adjustDefaultLayout(E1 editor) {
@@ -125,18 +100,6 @@ public abstract class SplitFileEditor<E1 extends FileEditor, E2 extends FileEdit
         }
 
         return null;
-    }
-
-    private void triggerSplitOrientationChange(boolean isVerticalSplit) {
-        if (myVerticalSplitOption == isVerticalSplit) {
-            return;
-        }
-
-        myVerticalSplitOption = isVerticalSplit;
-
-        myToolbarWrapper.refresh();
-        mySplitter.setOrientation(!myVerticalSplitOption);
-        myComponent.repaint();
     }
 
     @NotNull
@@ -203,11 +166,6 @@ public abstract class SplitFileEditor<E1 extends FileEditor, E2 extends FileEdit
         invalidateLayout(requestFocus);
     }
 
-    @NotNull
-    public SplitFileEditor.SplitEditorLayout getCurrentEditorLayout() {
-        return mySplitEditorLayout;
-    }
-
     private void invalidateLayout(boolean requestFocus) {
         adjustEditorsVisibility();
         myToolbarWrapper.refresh();
@@ -224,16 +182,6 @@ public abstract class SplitFileEditor<E1 extends FileEditor, E2 extends FileEdit
     private void adjustEditorsVisibility() {
         myMainEditor.getComponent().setVisible(mySplitEditorLayout.showFirst);
         mySecondEditor.getComponent().setVisible(mySplitEditorLayout.showSecond);
-    }
-
-    @NotNull
-    public E1 getMainEditor() {
-        return myMainEditor;
-    }
-
-    @NotNull
-    public E2 getSecondEditor() {
-        return mySecondEditor;
     }
 
     @NotNull

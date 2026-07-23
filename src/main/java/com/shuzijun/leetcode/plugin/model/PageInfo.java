@@ -53,7 +53,7 @@ public class PageInfo<T> {
     }
 
     public int getPageTotal() {
-        return (rowTotal / pageSize) + ((rowTotal % pageSize) > 0 ? 1 : 0);
+        return Math.ceilDiv(rowTotal, pageSize);
     }
 
     public int getRowTotal() {
@@ -171,24 +171,12 @@ public class PageInfo<T> {
             return orderBy;
         }
 
-        public void setOrderBy(String orderBy) {
-            this.orderBy = orderBy;
-        }
-
         public String getSortOrder() {
             return sortOrder;
         }
 
-        public void setSortOrder(String sortOrder) {
-            this.sortOrder = sortOrder;
-        }
-
         public String getDifficulty() {
             return difficulty;
-        }
-
-        public void setDifficulty(String difficulty) {
-            this.difficulty = difficulty;
         }
 
         public String getStatus() {
@@ -201,10 +189,6 @@ public class PageInfo<T> {
 
         public String getListId() {
             return listId;
-        }
-
-        public void setListId(String listId) {
-            this.listId = listId;
         }
 
         public List<String> getTags() {

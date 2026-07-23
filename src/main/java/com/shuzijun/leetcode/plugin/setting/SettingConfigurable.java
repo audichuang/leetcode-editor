@@ -14,8 +14,6 @@ import javax.swing.*;
  */
 public class SettingConfigurable implements SearchableConfigurable {
 
-    public static final String DISPLAY_NAME = PluginConstant.APPLICATION_CONFIGURABLE_DISPLAY_NAME;
-
     private SettingUI mainPanel;
 
     @NotNull

@@ -160,7 +160,8 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
                 initComponent();
             } else {
                 if (fileEditor != null) {
-                    RefreshQueue.getInstance().refresh(false, false, null, fileEditor.getFile());
+                    // async=true：EDT 上的 tab 切換不等 VFS refresh 完成，避免慢磁碟/網路掛載凍住 UI
+                    RefreshQueue.getInstance().refresh(true, false, null, fileEditor.getFile());
                 }
             }
         } else if (state instanceof ConvergePreview.LoginState) {

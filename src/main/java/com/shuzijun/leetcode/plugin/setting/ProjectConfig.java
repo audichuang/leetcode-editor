@@ -97,8 +97,4 @@ public class ProjectConfig implements PersistentStateComponent<ProjectConfig.Inn
         }
     }
 
-    public String getComponentName() {
-        return this.getClass().getName();
-    }
-
 }

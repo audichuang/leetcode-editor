@@ -65,23 +65,4 @@ public class CommentUtilsTest {
                 CommentUtils.createComment("Two Sum", CodeTypeEnum.JAVA, config));
     }
 
-    @Test
-    public void createSubmissionsExtractsPageDataAndStripsStatusCode() {
-        String page = "<script>\n"
-                + "var pageData = {\n"
-                + "  submissionData: {\n"
-                + "    status_code: parseInt('10', 10),\n"
-                + "    runtime: '12 ms'\n"
-                + "  }\n"
-                + "};\n"
-                + "if (isNaN(pageData.submissionData.status_code)) { pageData.submissionData.status_code = 12; }\n"
-                + "</script>";
-        String result = CommentUtils.createSubmissions(page);
-        assertFalse(result.contains("status_code"));
-        assertTrue(result.contains("runtime: '12 ms'"));
-        assertFalse(result.contains("\n"));
-        assertFalse(result.contains("if (isNaN"));
-        // 邊界：頁面沒有 pageData 片段時回傳 null
-        assertNull(CommentUtils.createSubmissions("<html>no page data</html>"));
-    }
 }

@@ -29,8 +29,8 @@ public class CodeTopManager {
         }
 
         if (navigatorAction.getFind().getFilter().isEmpty()) {
-            navigatorAction.getFind().addFilter(Constant.CODETOP_FIND_TYPE_DIFFICULTY, CodeTopManager.getDifficulty());
-            navigatorAction.getFind().addFilter(Constant.CODETOP_FIND_TYPE_TAGS, CodeTopManager.getTags());
+            navigatorAction.getFind().addFilter(Constant.FIND_TYPE_DIFFICULTY, CodeTopManager.getDifficulty());
+            navigatorAction.getFind().addFilter(Constant.FIND_TYPE_TAGS, CodeTopManager.getTags());
             navigatorAction.getFind().addFilter(Constant.CODETOP_FIND_TYPE_COMPANY, CodeTopManager.getCompany());
         }
         navigatorAction.loadData(selectTitleSlug);

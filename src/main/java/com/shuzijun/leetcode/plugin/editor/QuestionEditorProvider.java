@@ -71,12 +71,6 @@ public class QuestionEditorProvider extends SplitTextEditorProvider {
         } else {
             return new QuestionEditorWithPreview((TextEditor) firstEditor, secondEditor);
         }
-
-        //if (firstEditor instanceof TextEditor && secondEditor instanceof MarkdownSplitEditor) {
-
-        //} else {
-        //    throw new IllegalArgumentException("Main editor should be TextEditor");
-        //}
     }
 
 

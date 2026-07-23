@@ -25,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.HttpCookie;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -52,7 +53,7 @@ public class HttpLogin {
                     .addTextBody("next", "/problems")
                     .build();
             HttpResponse response = HttpRequest.builderPost(URLUtils.getLeetcodeLogin(), ent.getContentType().getValue())
-                    .body(IOUtils.toString(ent.getContent(), "UTF-8"))
+                    .body(new String(ent.getContent().readAllBytes(), StandardCharsets.UTF_8))
                     .addHeader("x-requested-with", "XMLHttpRequest")
                     .addHeader("accept", "*/*").request();
 

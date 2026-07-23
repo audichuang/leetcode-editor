@@ -20,11 +20,6 @@ public class Find {
         return filter;
     }
 
-    public Map<String, Sort> getSortMap() {
-
-        return sortMap;
-    }
-
     public void addFilter(String key, List<Tag> tags) {
         filter.put(key.toLowerCase(), tags);
     }
