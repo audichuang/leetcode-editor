@@ -137,19 +137,24 @@ public class HttpRequestUtils {
     private static final Object AUTH_CACHE_LOCK = new Object();
     private static volatile long authCacheTimestamp = -1L;
     private static volatile boolean authCacheResult = false;
+    // 站點切換（leetcode.com ↔ leetcode.cn）不會經過 setCookie/resetHttpclient，
+    // 快取必須連 host 一起記，host 不符視為 miss，否則切站後最多殘留 TTL 內的舊站登入狀態。
+    private static volatile String authCacheHost = null;
 
     public static boolean isLogin(Project project) {
+        String host = URLUtils.getLeetcodeHost();
         long now = System.currentTimeMillis();
-        if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS) {
+        if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS && host.equals(authCacheHost)) {
             return authCacheResult;
         }
         synchronized (AUTH_CACHE_LOCK) {
             now = System.currentTimeMillis();
-            if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS) {
+            if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS && host.equals(authCacheHost)) {
                 return authCacheResult;
             }
             HttpResponse response = HttpRequest.builderGet(URLUtils.getLeetcodePoints()).request();
             authCacheResult = response.getStatusCode() == 200;
+            authCacheHost = host;
             authCacheTimestamp = System.currentTimeMillis();
             return authCacheResult;
         }

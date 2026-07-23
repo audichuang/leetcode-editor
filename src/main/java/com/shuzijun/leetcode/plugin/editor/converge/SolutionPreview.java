@@ -223,6 +223,10 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
                     if (project.isDisposed() || disposed || myGen != generation) {
                         return;
                     }
+                    if (vf == null) {
+                        // 載入失敗不能留住 loadedArticleSlug，否則同一篇重選會被短路、永遠無法重試
+                        loadedArticleSlug = null;
+                    }
                     showArticle(vf);
                 });
             } catch (Exception e) {
@@ -230,6 +234,7 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
                     if (project.isDisposed() || disposed || myGen != generation) {
                         return;
                     }
+                    loadedArticleSlug = null;
                     mySplitter.setSecondComponent(new JBLabel(String.valueOf(e.getMessage())));
                 });
             }
