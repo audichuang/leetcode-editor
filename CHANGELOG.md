@@ -7,6 +7,21 @@
 [![捐赠][badge:donate-zh]][shuzijun-donate]
 [![内推][badge:referrals]][shuzijun-referrals]
 
+## 8.19.0
+
+### Changed
+- Performance: Clear All/One, question opening, note tab reselect, and local-link opening no longer freeze the IDE (recursive deletion and synchronous VFS refresh moved off the EDT)
+- Performance: reselecting the same solution no longer destroys and rebuilds its JCEF browser; a single solution selection triggers exactly one load, with concurrent downloads of the same article merged in flight
+- Performance: login-state checks are cached (positive results only, host-keyed, invalidated on every cookie change) — most operations now make half as many network requests; session switching no longer refetches progress twice
+- Performance: submit/run result polling uses progressive backoff (300ms→2s) instead of a fixed 300ms×100 loop; user-info retry after login is bounded, interruptible, and no longer serializes all projects behind one lock for up to 36s
+- Memory: composite editor construction failures now dispose already-built child editors instead of leaking the Project; Sentry client gets a disposal boundary and per-report ThreadLocal context cleanup; preview static server cache is path-whitelisted and size-bounded; JCEF panel init/dispose are exception-safe
+- Dead code sweep: −1200 lines of verified-unreferenced code (legacy Apache HTTP client remnants, unregistered migration listener, hand-rolled IO utils, pre-2022.3 reflection compatibility layers, unused constants/setters/i18n keys)
+
+### Fixed
+- Submission status could be written to the wrong question row when the list refreshed concurrently (background-thread/EDT race)
+- Login/logout events, search-field reads, and login-failure dialogs no longer touch Swing from background threads; failed cookie login keeps the dialog open for retry
+- Switching between leetcode.com and leetcode.cn no longer reuses the previous site's cached login state
+
 ## 8.18.0
 
 ### Changed
