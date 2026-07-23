@@ -239,8 +239,9 @@ public class SubmissionsPreview extends UserDataHolderBase implements FileEditor
         if (vf == null) {
             mySplitter.setSecondComponent(new JBLabel("no submission"));
         } else {
-            FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
-            FileEditor newEditor = editorProviders[0].createEditor(project, vf);
+            // getProviders(Project,VirtualFile) 在 262 已 deprecated，公開替代是 getProviderList
+            java.util.List<FileEditorProvider> editorProviders = FileEditorProviderManager.getInstance().getProviderList(project, vf);
+            FileEditor newEditor = editorProviders.get(0).createEditor(project, vf);
             if (newEditor == fileEditor) {
                 return;
             }

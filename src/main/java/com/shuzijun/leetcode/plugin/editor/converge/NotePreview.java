@@ -111,10 +111,11 @@ public class NotePreview extends UserDataHolderBase implements FileEditor {
             if (vf == null) {
                 myComponent.addToCenter(new JBLabel("No note"));
             } else {
-                FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
+                // getProviders(Project,VirtualFile) 在 262 已 deprecated，公開替代是 getProviderList
+                java.util.List<FileEditorProvider> editorProviders = FileEditorProviderManager.getInstance().getProviderList(project, vf);
 
-                if (editorProviders != null && editorProviders.length > 0) {
-                    fileEditor = editorProviders[0].createEditor(project, vf);
+                if (!editorProviders.isEmpty()) {
+                    fileEditor = editorProviders.get(0).createEditor(project, vf);
                     Disposer.register(notePreview, fileEditor);
                 } else {
                     fileEditor = new PsiAwareTextEditorProvider().createEditor(project, vf);

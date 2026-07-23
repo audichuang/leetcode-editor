@@ -136,31 +136,40 @@ public class HttpRequestUtils {
     private static final long AUTH_CACHE_TTL_MILLIS = 30_000L;
     private static final Object AUTH_CACHE_LOCK = new Object();
     private static volatile long authCacheTimestamp = -1L;
-    private static volatile boolean authCacheResult = false;
     // 站點切換（leetcode.com ↔ leetcode.cn）不會經過 setCookie/resetHttpclient，
     // 快取必須連 host 一起記，host 不符視為 miss，否則切站後最多殘留 TTL 內的舊站登入狀態。
     private static volatile String authCacheHost = null;
+    // 只快取「已登入」：登入可以不經過任何失效點（CN 帳密 ajaxLogin 的 cookie 直接寫進 OkHttp cookie store），
+    // 快取 false 會讓剛登入的帳號最多 30 秒仍被當未登入——這也是登入自動恢復「不快取假未登入」不變式的要求。
+    // generation：失效走的是 HttpRequestUtils.class 鎖（setCookie 等），與這裡的 AUTH_CACHE_LOCK 不同把，
+    // 在途的驗證若跨過一次失效，結果不得回寫（否則登出後可殘留 30 秒的舊 true）。
+    private static volatile long authCacheGeneration = 0L;
 
     public static boolean isLogin(Project project) {
         String host = URLUtils.getLeetcodeHost();
         long now = System.currentTimeMillis();
         if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS && host.equals(authCacheHost)) {
-            return authCacheResult;
+            return true;
         }
         synchronized (AUTH_CACHE_LOCK) {
             now = System.currentTimeMillis();
             if (authCacheTimestamp >= 0 && now - authCacheTimestamp < AUTH_CACHE_TTL_MILLIS && host.equals(authCacheHost)) {
-                return authCacheResult;
+                return true;
             }
+            long gen = authCacheGeneration;
             HttpResponse response = HttpRequest.builderGet(URLUtils.getLeetcodePoints()).request();
-            authCacheResult = response.getStatusCode() == 200;
-            authCacheHost = host;
-            authCacheTimestamp = System.currentTimeMillis();
-            return authCacheResult;
+            boolean login = response.getStatusCode() == 200;
+            if (login && gen == authCacheGeneration) {
+                authCacheHost = host;
+                authCacheTimestamp = System.currentTimeMillis();
+            }
+            return login;
         }
     }
 
     private static void invalidateAuthCache() {
+        // 呼叫端（setCookie/setCookieIfAbsent/resetHttpclient）都在 HttpRequestUtils.class 鎖內，遞增已序列化
+        authCacheGeneration++;
         authCacheTimestamp = -1L;
     }
 

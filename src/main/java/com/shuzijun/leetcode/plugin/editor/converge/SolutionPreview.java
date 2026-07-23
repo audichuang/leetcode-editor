@@ -248,8 +248,9 @@ public class SolutionPreview extends UserDataHolderBase implements FileEditor {
         }
         // 同一篇題解（同一 VirtualFile）未變時重用既有 FileEditor，避免 dispose/重建 JCEF（T4 問題 A）
         if (fileEditor == null || !vf.equals(fileEditor.getFile())) {
-            FileEditorProvider[] editorProviders = FileEditorProviderManager.getInstance().getProviders(project, vf);
-            FileEditor newEditor = editorProviders[0].createEditor(project, vf);
+            // getProviders(Project,VirtualFile) 在 262 已 deprecated，公開替代是 getProviderList
+            java.util.List<FileEditorProvider> editorProviders = FileEditorProviderManager.getInstance().getProviderList(project, vf);
+            FileEditor newEditor = editorProviders.get(0).createEditor(project, vf);
             if (fileEditor != null) {
                 FileEditor temp = fileEditor;
                 Disposer.dispose(temp);

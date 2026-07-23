@@ -4,7 +4,6 @@ import com.intellij.ide.plugins.PluginManagerCore;
 import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.extensions.PluginId;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.util.text.StringUtil;
 import com.shuzijun.leetcode.plugin.model.Config;
@@ -37,20 +36,23 @@ public class SentryUtils {
                     final SentryClient created = SentryClientFactory.sentryClient("https://ac9e2d69c3294870848cee5b1b23ad51@sentry.io/1534194");
                     sentryClient = created;
                     client = created;
-                    // ponytail: application卸載/重載時關閉底層連線池(1.7.9預設帶專用ThreadPoolExecutor)
-                    // 並清static參照,避免舊classloader被連線緒釘住;最小可行做法,不另建application service。
-                    Disposer.register(ApplicationManager.getApplication(), () -> {
-                        synchronized (SentryUtils.class) {
-                            created.closeConnection();
-                            if (sentryClient == created) {
-                                sentryClient = null;
-                            }
-                        }
-                    });
+                    // 實例化 SentryLifecycle service：它的 dispose()（plugin 卸載/IDE 關閉）會 closeConnection
+                    // 關掉 1.7.9 預設連線的專用 ThreadPoolExecutor，避免舊 classloader 被連線緒釘住
+                    ApplicationManager.getApplication().getService(SentryLifecycle.class);
                 }
             }
         }
         return client;
+    }
+
+    static void closeClient() {
+        synchronized (SentryUtils.class) {
+            SentryClient client = sentryClient;
+            if (client != null) {
+                sentryClient = null;
+                client.closeConnection();
+            }
+        }
     }
 
     public static void submitErrorReport(Throwable error, String description) {

@@ -33,6 +33,7 @@
                     factoryClass="com.shuzijun.leetcode.plugin.window.ConsoleWindowFactory" />
         <applicationService serviceInterface="com.shuzijun.leetcode.plugin.setting.PersistentConfig"
                             serviceImplementation="com.shuzijun.leetcode.plugin.setting.PersistentConfig"/>
+        <applicationService serviceImplementation="com.shuzijun.leetcode.plugin.utils.SentryLifecycle"/>
         <projectService serviceInterface="com.shuzijun.leetcode.plugin.setting.ProjectConfig"
                         serviceImplementation="com.shuzijun.leetcode.plugin.setting.ProjectConfig"/>
         <projectService serviceInterface="com.shuzijun.leetcode.plugin.setting.StatisticsData"
