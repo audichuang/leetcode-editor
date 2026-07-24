@@ -27,6 +27,7 @@
   - 有用的链接
     - [登录帮助][gh:login-help]
     - [自定义代码生成][gh:custom-code-zh] ([示例][gh:leetcode-question])
+    - [Hermes 学习进度整合规格](doc/HermesProgressIntegration_ZH.md)
     
   - **更开放的功能**: [shuzijun/lc-sdk](https://github.com/shuzijun/lc-sdk)
 
